@@ -179,9 +179,9 @@ cbind(sort(levels(prism$SiteID)),sort(levels(aphid$SiteID)))
 # Quick data summaries ----------------------------------------------------
 
 # summarise by total count
-aphid_long %>%
+aphid %>%
   group_by(SpeciesName) %>%
-  summarise(TotalCount = sum(Count)) %>%
+  summarise(TotalCount = sum(Count), n = n()) %>%
   arrange(desc(TotalCount))
 
 # unique species per state
@@ -198,7 +198,7 @@ aphid_long %>%
   mutate(SiteID = as.character(SiteID)) %>%
   summarise(N_Sites = length(unique(SiteID)))
 
-### summaries of species diversity ###
+### summaries of species diversity from full aphid dataset ###
 aphid_joined <-
   aphid_long %>%
   filter(Count > 0) %>%
@@ -211,10 +211,11 @@ aphid_joined %>%
   group_by(State) %>%
   summarise(Sites = f(SiteID),
             Years = f(Year),
+            Samples = f(SampleID),
+            Families = f(Family),
             Genera = f(Genus),
             Species = f(Species),
-            TotCt = sum(Count),
-            Samples = f(SampleID)
+            TotCt = sum(Count)
   ) %>%
   add_column(MeanCt = .$TotCt/.$Samples)
 
