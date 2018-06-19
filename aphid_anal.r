@@ -150,10 +150,6 @@ prism_join = prism_in %>%
          GDD50 = cumsum(fn.gdd(tminF, tmaxF, 50, 86))) %>%
   ungroup()
 
-# remove existing data for 2017
-prism <- prism %>%
-  filter(Year != 2017)
-
 # add new data to prism
 prism <- rbind(prism, prism_join)
 
@@ -162,6 +158,9 @@ prism$SiteID <- as.factor(prism$SiteID)
 prism$Year <- as.integer(prism$Year)
 str(prism)
 
+# save prism data
+prism %>% write.csv("prism.csv")
+
 
 # Join PRISM GDDs with aphid df ----------------------------------------------
 aphid$Date <- as.Date(aphid$Date)
@@ -169,12 +168,10 @@ aphid <-
   left_join(aphid,
             prism[, c("SiteID", "Date", "GDD39", "GDD50")],
             by = c("SiteID", "Date"))
-aphid$SiteID <- as.factor(aphid$SiteID)
+aphid$SiteID <- as.factor(aphid$SiteID) # fix data type
+aphid$Date <- as.Date(aphid$Date) # fix data type
 
-aphid$Date <- 
-  as.Date(aphid$Date)
-
-cbind(sort(levels(prism$SiteID)),sort(levels(aphid$SiteID)))
+cbind(sort(levels(prism$SiteID)),sort(levels(aphid$SiteID))) # check
 
 # Quick data summaries ----------------------------------------------------
 
@@ -245,7 +242,7 @@ aphid_long %>%
 # Quick data vizualization -------------------------------------------
 
 # group by state
-p1 <-
+p <-
   aphid %>%
   group_by(State, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -266,13 +263,13 @@ p1 <-
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "none")
-p1
+p
 pdf("NCR_CaptureByState.pdf", h = 8.5, w = 11)
-p1
+p
 dev.off()
 
 # group by year
-p2 <-
+p <-
   aphid %>%
   group_by(Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -288,13 +285,13 @@ p2 <-
   ) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
         legend.position = "none")
-p2
+p
 pdf("NCR_CaptureByYear.pdf", h = 8.5, w = 11)
-p2
+p
 dev.off()
 
 # group by state and year
-p3 <- 
+p <- 
   aphid %>%
   group_by(State, Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -314,9 +311,9 @@ p3 <-
     strip.text.x = element_text(size = 8),
     strip.text.y = element_text(angle = 0)
   )
-p3
+p
 pdf("NCR_CaptureByYearAndState.pdf", h = 8.5, w = 11)
-p3
+p
 dev.off()
 
 # CM: YWL (multi-year by year + week + loc) ----------------------------------------------
@@ -486,14 +483,14 @@ rem.GDD <- function(df) {
 }
 
 # generate CMs from GDD
-CM.GDD <-
+CM_GDD <-
   aphid %>%
   group_by(Species = SpeciesName) %>%
   do(rem.GDD(.))
 
 # plot CMs
 p <-
-  ggplot(CM.GDD, aes(x = GDD, y = CMs)) +
+  ggplot(CM_GDD, aes(x = GDD, y = CMs)) +
   facet_wrap( ~ Species, scales = "free") +
   scale_x_sqrt() +
   stat_smooth(
@@ -514,62 +511,31 @@ p
 dev.off()
 
 # prediction function
-GDDgam <- CM.GDD %>%
+GDDlist <- seq(10, 7500, by = 10)
+gampreds <- CM_GDD %>%
   group_by(Species) %>%
   do(
     data.frame(
-      GDD = seq(10, 7500, by = 10),
-      pred = predict.gam(gam(CMs ~ s(GDD, k = 20), data = .), GDD)
+      GDDs = GDDlist,
+      pred = predict.gam(gam(CMs ~ s(GDD, k = 20), data = .),
+                         data.frame(GDD = GDDlist))
+    )
+  )
+
+# identify critical points along the smooth curve
+gam_pts <- gampreds %>%
+  mutate(
+    type = case_when(
+      sign(lag(pred)) < sign(pred) ~ "-/-",         # rising intercept
+      sign(lag(pred)) > sign(pred) ~ "-\\-",        # falling intercept
+      lag(pred) < pred & pred > lead(pred) ~ "/\\", # local maxima
+      lag(pred) > pred & pred < lead(pred) ~ "\\/"  # local minima
     )
   ) %>%
-  filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
-GDDgam
+  na.omit() %>%
+  mutate(GDDs = GDDs - 5)
+gam_pts
 
-
-### prediction of intercepts ----------------------------------------
-require(mgcv)
-
-gdds <- seq(100, 3000, by = 10)
-
-# incercepts by loess smoothing
-weeklist <- 1:52
-YWLpreds <- CM.YWL %>%
-  group_by(Species) %>%
-  do(data.frame(Week = weeklist, pred = predict(loess(CMs ~ Week, .), weeklist))) %>%
-  filter(pred <= 0 & lag(pred) >= 0 | pred >= 0 & lead(pred) <= 0) 
-YWLpreds
-
-YWLpreds <- CM.YWL %>%
-  group_by(Species) %>%
-  do(
-    data.frame(
-      Week = weeklist,
-      pred = predict(loess(CMs ~ Week, .), weeklist)
-      )
-    ) %>%
-  filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
-YWLpreds
-
-YWLgam <- CM.YWL %>%
-  group_by(Species) %>%
-  do(
-    data.frame(
-      Week = weeklist,
-      pred = predict.gam(gam(CMs ~ s(Week, k = 20), data = .))
-      )
-    ) %>%
-  filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
-YWLgam
-
-# try gam method
-YWLgam <- 
-  data.frame(weeklist, predict(gam(CM.YWL, CMs ~ s(Week)), CM.YWL$Week))
-
-
-smooth <- gam(CMs ~ s(Week), data = CM.ag, drop.unused.levels = FALSE)
-
-predict.gam(smooth, 26, type = "response")
-str(smooth)
 
 ### Plots -------------------------------------------------------------------
 
