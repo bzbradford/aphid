@@ -1,20 +1,22 @@
-# Load packages -----------------------------------------------------------
+# Load packages --------------------------------------------------------
 
 library(lme4)
 library(mgcv)
 library(ggplot2)
 library(tidyverse)
 
-# Read in data ------------------------------------------------------------
 
+
+# Load and prepare data ------------------------------------------------
+
+# read count and species files
 aphid_in = read.csv(file.choose(), header = TRUE, na = c('','.')) # aphid data in dummied long format
-aphid_in$Date = as.Date(aphid_in$Date)
+aphid_in$Date = as.Date(aphid_in$Date) # set date data type
 aphid_sp = read.csv(file.choose(), header = TRUE, na = c('','.')) # load species
 
 
-# Expand dataset with zeros -------------------------------------------------------
-
-fn.expand = function(df) {
+### Expand dataset with zeros ###
+aph_expand = function(df) {
   cols = ncol(df)
   df %>%
     spread(SpeciesName,
@@ -27,21 +29,28 @@ fn.expand = function(df) {
     filter(SpeciesName != "_dummy_") %>%
     droplevels()
 }
-aphid_long <- fn.expand(aphid_in)
+aphid_long <- aph_expand(aphid_in)
 
-# File export -------------------------------------------------------------
 
+### Join PRISM GDDs with aphid data ###
+aphid_long =
+  left_join(aphid_long,
+            prism[, c("SiteID", "Date", "GDD39", "GDD50")],
+            by = c("SiteID", "Date"))
+aphid_long$SiteID = as.factor(aphid_long$SiteID) # fix data type
+
+
+### optional file export ###
 aphid_long %>%
   filter(Count > 0) %>%
-#  select(-c(GDD, isFound)) %>%
   arrange(SiteName, Date) %>%
   write.csv(file.choose())
 
-# Aphid data subset options ---------------------------------------------------
+
+# Aphid data subset options -------------------------------------
 
 # Species list 1 (from Frost code)
-aphid <-
-  aphid_long %>%
+aphid_long %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -57,11 +66,11 @@ aphid <-
       "Therioaphis trifolii"
     )
   ) %>%
-  droplevels()
+  droplevels() ->
+  aphid
 
-# aphid list 2: PVY-relevant species
-aphid <-
-  aphid_long %>%
+# Species list 2: PVY-relevant species
+aphid_long %>%
   filter(
     SpeciesName %in% c(
       "Myzus persicae",
@@ -80,11 +89,11 @@ aphid <-
       "Lipaphis pseudobrassicae"
     )
   ) %>%
-  droplevels()
+  droplevels() ->
+  aphid
 
-# shortlist
-aphid <-
-  aphid_long %>%
+# Just four species
+aphid_long %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -93,87 +102,25 @@ aphid <-
       "Therioaphis trifolii"
     )
   ) %>%
-  droplevels()
+  droplevels() ->
+  aphid
 
-# Filter dataset by top n species
-fn.topsp <- function(df, n) {
+# Select top n species
+topsp <- function(df, n) {
   top <-
     df %>%
     group_by(SpeciesName) %>%
     summarise(totcount = sum(Count)) %>%
     arrange(desc(totcount)) %>%
     top_n(n, totcount)
-  
   df %>%
     filter(SpeciesName %in% top$SpeciesName) %>%
     droplevels()
 }
-
-aphid <- fn.topsp(aphid_long, 9)
-
-# Compute GDDs from PRISM data ---------------------------------------------------
-
-# For handling weather data acquired from http://prism.oregonstate.edu/explorer/bulk.php
-# Combine prism csv into single file
-
-files = choose.files() # pick prism output sheets
-
-# append all prism files into single data frame
-for (i in 1:length(files)){
-  if (i == 1) {prism_in = NULL} # clear temp file on first loop
-  prism_in <-
-    rbind(prism_in, read.csv(files[i], skip = 10)) # append each file
-}
-
-# assign column names
-names(prism_in) <- c("SiteID",
-                     "Longitude",
-                     "Latitude",
-                     "ElevFt",
-                     "Date",
-                     "pptIn",
-                     "tminF",
-                     "tmaxF")
-
-# define GDD function
-fn.gdd <- function(tmin, tmax, lower = 50, upper = 86) {
-  pmax(0, (pmax(tmin, lower) + pmin(tmax, upper)) / 2 - lower)
-}
-
-# compute new columns
-prism_join = prism_in %>%
-  mutate(Date = as.Date(Date),
-         Year = format(Date, "%Y")) %>%
-  group_by(SiteID, Year) %>%
-  arrange(SiteID, Date) %>%
-  mutate(GDD39 = cumsum(fn.gdd(tminF, tmaxF, 39, 86)),
-         GDD50 = cumsum(fn.gdd(tminF, tmaxF, 50, 86))) %>%
-  ungroup()
-
-# add new data to prism
-prism <- rbind(prism, prism_join)
-
-# fix column types
-prism$SiteID <- as.factor(prism$SiteID)
-prism$Year <- as.integer(prism$Year)
-str(prism)
-
-# save prism data
-prism %>% write.csv("prism.csv")
+aphid <- topsp(aphid_long, 9)
 
 
-# Join PRISM GDDs with aphid df ----------------------------------------------
-aphid$Date <- as.Date(aphid$Date)
-aphid <-
-  left_join(aphid,
-            prism[, c("SiteID", "Date", "GDD39", "GDD50")],
-            by = c("SiteID", "Date"))
-aphid$SiteID <- as.factor(aphid$SiteID) # fix data type
-aphid$Date <- as.Date(aphid$Date) # fix data type
-
-cbind(sort(levels(prism$SiteID)),sort(levels(aphid$SiteID))) # check
-
-# Quick data summaries ----------------------------------------------------
+# Quick data summaries of subset ------------------------------------------------
 
 # summarise by total count
 aphid %>%
@@ -195,15 +142,14 @@ aphid_long %>%
   mutate(SiteID = as.character(SiteID)) %>%
   summarise(N_Sites = length(unique(SiteID)))
 
-### summaries of species diversity from full aphid dataset ###
-aphid_joined <-
+
+# Species diversity from full aphid dataset -----------------------------
+aphid_named <-
   aphid_long %>%
   filter(Count > 0) %>%
   left_join(aphid_sp, by = "SpeciesName") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
-
 f <- function(x) {length(unique(as.character(x)))} # returns number of unique factors
-
 aphid_joined %>%
   group_by(State) %>%
   summarise(Sites = f(SiteID),
@@ -215,7 +161,6 @@ aphid_joined %>%
             TotCt = sum(Count)
   ) %>%
   add_column(MeanCt = .$TotCt/.$Samples)
-
 
 # summarise by frequency
 aphid_long <-
@@ -256,19 +201,21 @@ p <-
   geom_bar(stat = "identity") +
   scale_y_sqrt() +
   coord_flip() +
-  labs(
-    aes(y = "Mean count",
-        x = "",
-        title = "NCR Aphid Suction Trap Network ('05-'17): Captures by state")
-  ) +
+  labs(x = "",
+       y = "Mean Count",
+       title = paste("Aphid Suction Trap Network (",
+                     min(aphid$Year),
+                     "-",
+                     max(aphid$Year),
+                     "): Captures by State",
+                     sep = '')) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "none")
 p
-pdf("NCR_CaptureByState.pdf", h = 8.5, w = 11)
-p
-dev.off()
 
-# group by year
+pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
+
+# Counts by year
 p <-
   aphid %>%
   group_by(Year, SpeciesName) %>%
@@ -278,17 +225,20 @@ p <-
   facet_wrap(~ reorder(SpeciesName, -totcount)) +
   geom_bar(stat = "identity") +
   scale_y_sqrt() +
-  labs(
-    aes(y = "Mean count",
-        x = "",
-        title = "NCR Aphid Suction Trap Network ('05-'17): Captures by year")
-  ) +
+  labs(x = "",
+       y = "Mean Count",
+       title = paste("Aphid Suction Trap Network (",
+                     min(aphid$Year),
+                     "-",
+                     max(aphid$Year),
+                     "): Captures by Year",
+                     sep = '')) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
         legend.position = "none")
 p
-pdf("NCR_CaptureByYear.pdf", h = 8.5, w = 11)
-p
-dev.off()
+
+pdf("out/STN_CountsByYear.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
+
 
 # group by state and year
 p <- 
@@ -300,11 +250,14 @@ p <-
   facet_grid(State ~ SpeciesName, labeller = label_wrap_gen(10)) +
   geom_bar(stat = "identity", aes(fill = State)) +
   scale_y_sqrt() +
-  labs(
-    aes(y = "Mean count",
-        x = "Year",
-        title = "NCR Aphid Suction Trap Network ('05-'16): Top captures by year and state")
-  ) +
+  labs(x = "",
+       y = "Mean Count",
+       title = paste("Aphid Suction Trap Network (",
+                     min(aphid$Year),
+                     "-",
+                     max(aphid$Year),
+                     "): Captures by Year and State",
+                     sep = '')) +
   theme(
     axis.text.x = element_text(angle = 90, vjust = 0.5),
     legend.position = "none",
@@ -312,9 +265,8 @@ p <-
     strip.text.y = element_text(angle = 0)
   )
 p
-pdf("NCR_CaptureByYearAndState.pdf", h = 8.5, w = 11)
-p
-dev.off()
+
+pdf("out/STN_CaptureByYearAndState.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
 
 # CM: YWL (multi-year by year + week + loc) ----------------------------------------------
 
@@ -460,81 +412,83 @@ WLgam
 
 # CMs by GDD ---------------------------------------------------------------
 
-# define location variable
-aphid$Location <- aphid$SiteID
 
-# choose GDD model
-aphid$GDD <- aphid$GDD39
-
-# define function
-rem.GDD <- function(df) {
+### define random effects function ###
+remGDD <- function(df) {
   fmod <-
     glmer(
       Count ~ 1 +
-        (1 | GDD) +
+        (1 | GDD39) +
         (1 | Year) +
         (1 | SiteID), # location
       data = df,
       family = "poisson",
       control = glmerControl(optimizer = "Nelder_Mead") #fix 'degenerate hessian' warning
     )
-  data.frame(GDD = as.numeric(rownames(ranef(fmod)$GDD)),
-             CMs = ranef(fmod)$GDD[, 1])
+  data.frame(GDD = as.numeric(rownames(ranef(fmod)$GDD39)),
+             CM = ranef(fmod)$GDD39[, 1])
 }
 
-# generate CMs from GDD
+### generate CMs from GDD ###
 CM_GDD <-
   aphid %>%
-  group_by(Species = SpeciesName) %>%
-  do(rem.GDD(.))
+  group_by(SpeciesName) %>%
+  do(remGDD(.))
 
-# plot CMs
+
+### Generate gam predictions ###
+GDDlist <- 1:7500
+gampreds <- CM_GDD %>%
+  group_by(SpeciesName) %>%
+  do(
+    data.frame(
+      GDD = GDDlist,
+      CM = predict.gam(gam(CM ~ s(GDD), data = .),
+                       data.frame(GDD = GDDlist))
+    )
+  )
+
+### identify min, max, and intercepts ###
+gam_pts <- gampreds %>%
+  mutate(
+    type = case_when(
+      sign(lag(CM)) < sign(CM) ~ "RI",         # rising intercept
+      sign(lag(CM)) > sign(CM) ~ "FI",        # falling intercept
+      lag(CM) < CM & CM > lead(CM) ~ "max", # local maxima
+      lag(CM) > CM & CM < lead(CM) ~ "min"  # local minima
+    )
+  ) %>%
+  na.omit()
+gam_pts
+
+### plot phenology curves ###
 p <-
-  ggplot(CM_GDD, aes(x = GDD, y = CMs)) +
-  facet_wrap( ~ Species, scales = "free") +
+  ggplot(CM_GDD, aes(x = GDD, y = CM)) +
+  facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   stat_smooth(
     method = "gam",
     formula = y ~ s(x),
     fill = "grey50",
     colour = "Black",
-    size = 1.5) +
+    size = 1.5
+    ) +
   geom_abline(intercept = 0, slope = 0) +
-  labs(aes(x = "GDDs",
-           y = "CMs (GDD39/86)",
-           title = "GDD39/86 fits for NCR Suction Traps (2005-2017)"))
+  labs(x = "GDDs",
+       y = "CMs (GDD39/86)",
+       title = paste("GDD39/86 fits for Suction Traps",
+                     min(aphid$Year), "-", max(aphid$Year))
+       )
 p
 
-# export to pdf
-pdf("NCR_CMsByGDD50.pdf", h = 8.5, w = 11)
-p
-dev.off()
+# add and label points of interest
+p + geom_point(data = gampreds, color = "red") +
+  geom_point(data = gam_pts, aes(x = GDD, y = CM)) +
+  geom_text(data = gam_pts, aes(x = GDD, y = CM, label = GDD), check_overlap = TRUE)
 
-# prediction function
-GDDlist <- seq(10, 7500, by = 10)
-gampreds <- CM_GDD %>%
-  group_by(Species) %>%
-  do(
-    data.frame(
-      GDDs = GDDlist,
-      pred = predict.gam(gam(CMs ~ s(GDD, k = 20), data = .),
-                         data.frame(GDD = GDDlist))
-    )
-  )
+# write pdf
+pdf("out/STN_CMsByGDD.pdf", h = 8.5, w = 11); p; dev.off()
 
-# identify critical points along the smooth curve
-gam_pts <- gampreds %>%
-  mutate(
-    type = case_when(
-      sign(lag(pred)) < sign(pred) ~ "-/-",         # rising intercept
-      sign(lag(pred)) > sign(pred) ~ "-\\-",        # falling intercept
-      lag(pred) < pred & pred > lead(pred) ~ "/\\", # local maxima
-      lag(pred) > pred & pred < lead(pred) ~ "\\/"  # local minima
-    )
-  ) %>%
-  na.omit() %>%
-  mutate(GDDs = GDDs - 5)
-gam_pts
 
 
 ### Plots -------------------------------------------------------------------
