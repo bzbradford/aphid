@@ -1,23 +1,28 @@
-# Load packages --------------------------------------------------------
+# Load and prepare data ------------------------------------------------
 
+# required packages
 library(lme4)
 library(mgcv)
 library(ggplot2)
 library(tidyverse)
 
+# read count (including dummy counts)
+aphidin <-
+  read.csv("aphid.csv", header = TRUE, na = c('','.')) %>%
+  mutate(Date = as.Date(Date))
 
+# read species names
+aphidsp <- read.csv("aphidsp.csv", header = TRUE, na = c('','.'))
 
-# Load and prepare data ------------------------------------------------
-
-# read count and species files
-aphid_in = read.csv(file.choose(), header = TRUE, na = c('','.')) # aphid data in dummied long format
-aphid_in$Date = as.Date(aphid_in$Date) # set date data type
-aphid_sp = read.csv(file.choose(), header = TRUE, na = c('','.')) # load species
+# read prism data
+prism <-
+  read.csv("prism.csv", header = TRUE) %>%
+  mutate(Date = as.Date(Date))
 
 
 ### Expand dataset with zeros ###
-aph_expand = function(df) {
-  cols = ncol(df)
+aph.expand <- function(df) {
+  cols <- ncol(df)
   df %>%
     spread(SpeciesName,
            Count,
@@ -29,28 +34,36 @@ aph_expand = function(df) {
     filter(SpeciesName != "_dummy_") %>%
     droplevels()
 }
-aphid_long <- aph_expand(aphid_in)
+aphidlong <- aph.expand(aphidin)
 
 
 ### Join PRISM GDDs with aphid data ###
-aphid_long =
-  left_join(aphid_long,
-            prism[, c("SiteID", "Date", "GDD39", "GDD50")],
-            by = c("SiteID", "Date"))
-aphid_long$SiteID = as.factor(aphid_long$SiteID) # fix data type
+aphidlong <-
+  aphidlong %>%
+  left_join(prism[, c("SiteID", "Date", "GDD39", "GDD50")],
+            by = c("SiteID", "Date")) %>%
+  mutate(SiteID = as.factor(SiteID))
+
+### Join aphid names to dataset ###
+aphidlong <-
+  aphidlong %>%
+  left_join(aphidsp, by = "SpeciesName") %>%
+  mutate(SpeciesName = as.factor(SpeciesName))
 
 
 ### optional file export ###
-aphid_long %>%
+aphidlong %>%
   filter(Count > 0) %>%
   arrange(SiteName, Date) %>%
-  write.csv(file.choose())
+  write.csv("aphidlong.csv", na = "")
+
 
 
 # Aphid data subset options -------------------------------------
 
 # Species list 1 (from Frost code)
-aphid_long %>%
+aphid <-
+  aphidlong %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -66,11 +79,11 @@ aphid_long %>%
       "Therioaphis trifolii"
     )
   ) %>%
-  droplevels() ->
-  aphid
+  droplevels()
 
 # Species list 2: PVY-relevant species
-aphid_long %>%
+aphid <-
+  aphidlong %>%
   filter(
     SpeciesName %in% c(
       "Myzus persicae",
@@ -89,11 +102,11 @@ aphid_long %>%
       "Lipaphis pseudobrassicae"
     )
   ) %>%
-  droplevels() ->
-  aphid
+  droplevels()
 
 # Just four species
-aphid_long %>%
+aphid <-
+  aphidlong %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -102,11 +115,10 @@ aphid_long %>%
       "Therioaphis trifolii"
     )
   ) %>%
-  droplevels() ->
-  aphid
+  droplevels()
 
 # Select top n species
-topsp <- function(df, n) {
+aph.topsp <- function(df, n) {
   top <-
     df %>%
     group_by(SpeciesName) %>%
@@ -117,7 +129,8 @@ topsp <- function(df, n) {
     filter(SpeciesName %in% top$SpeciesName) %>%
     droplevels()
 }
-aphid <- topsp(aphid_long, 9)
+aphid <- aph.topsp(aphidlong, 9)
+
 
 
 # Quick data summaries of subset ------------------------------------------------
@@ -129,14 +142,14 @@ aphid %>%
   arrange(desc(TotalCount))
 
 # unique species per state
-aphid_long %>%
+aphidlong %>%
   filter(Count > 0) %>%
   group_by(State) %>%
   mutate(SpeciesName = as.character(SpeciesName)) %>%
   summarise(N_Taxa = length(unique(SpeciesName)))
 
 # unique sites per state
-aphid_long %>%
+aphidlong %>%
   filter(Count > 0) %>%
   group_by(State) %>%
   mutate(SiteID = as.character(SiteID)) %>%
@@ -144,13 +157,10 @@ aphid_long %>%
 
 
 # Species diversity from full aphid dataset -----------------------------
-aphid_named <-
-  aphid_long %>%
-  filter(Count > 0) %>%
-  left_join(aphid_sp, by = "SpeciesName") %>%
-  mutate(SpeciesName = as.factor(SpeciesName))
+
 f <- function(x) {length(unique(as.character(x)))} # returns number of unique factors
-aphid_joined %>%
+aphidlong %>%
+  filter(Count > 0) %>%
   group_by(State) %>%
   summarise(Sites = f(SiteID),
             Years = f(Year),
@@ -163,10 +173,8 @@ aphid_joined %>%
   add_column(MeanCt = .$TotCt/.$Samples)
 
 # summarise by frequency
-aphid_long <-
-  aphid_long %>%
-  mutate(isFound = case_when(Count == 0 ~ 0, Count > 0 ~ 1))
-aphid_long %>%
+aphidlong %>%
+  mutate(isFound = case_when(Count == 0 ~ 0, Count > 0 ~ 1)) %>%
   group_by(SpeciesName) %>%
   summarise(Freq = sum(isFound)/n()) %>%
   arrange(desc(Freq))
@@ -178,16 +186,17 @@ aphid %>%
   summarise(Obs = n())
 
 # weeks per year
-aphid_long %>%
+aphidlong %>%
   group_by(Year) %>%
   summarise(N_Weeks = length(unique(Week)),
             N_Captures = sum(Count))
 
 
+
 # Quick data vizualization -------------------------------------------
 
-# group by state
-p <-
+### group by state ###
+p1 <-
   aphid %>%
   group_by(State, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -211,12 +220,13 @@ p <-
                      sep = '')) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "none")
-p
+p1
 
-pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
+# write pdf
+pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); p1; dev.off()
 
-# Counts by year
-p <-
+### Counts by year ###
+p2 <-
   aphid %>%
   group_by(Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -235,13 +245,14 @@ p <-
                      sep = '')) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
         legend.position = "none")
-p
+p2
 
-pdf("out/STN_CountsByYear.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
+# Write pdf
+pdf("out/STN_CountsByYear.pdf", h = 8.5, w = 11); p2; dev.off()
 
 
-# group by state and year
-p <- 
+### group by state and year ###
+p3 <- 
   aphid %>%
   group_by(State, Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -264,9 +275,12 @@ p <-
     strip.text.x = element_text(size = 8),
     strip.text.y = element_text(angle = 0)
   )
-p
+p3
 
-pdf("out/STN_CaptureByYearAndState.pdf", h = 8.5, w = 11); p; dev.off() # write pdf
+# Write pdf
+pdf("out/STN_CaptureByYearAndState.pdf", h = 8.5, w = 11); p3; dev.off()
+
+
 
 # CM: YWL (multi-year by year + week + loc) ----------------------------------------------
 
@@ -280,7 +294,8 @@ aphid$YWL <- interaction(aphid$Year, aphid$Week, aphid$Location)
 aphid$YWL <- factor(aphid$YWL)
 
 # define function
-rem.YWL <- function(df) {
+remYWL <- function(df) {
+  require(lme4)
   fmod <-
     glmer(
       Count ~ 1 +
@@ -291,22 +306,21 @@ rem.YWL <- function(df) {
         (1 | YL) +
         (1 | YWL),
       data = df,
-      family = "poisson",
-      control = glmerControl(optimizer ="Nelder_Mead")
+      family = "poisson"
     )
   data.frame(Week = as.numeric(rownames(ranef(fmod)$Week)),
              CMs = ranef(fmod)$Week[, 1])
 }
 
 # generate CMs
-CM.YWL <-
+CMYWL <-
   aphid %>%
   group_by(Species = SpeciesName) %>%
-  do(rem.YWL(.))
+  do(remYWL(.))
 
 # plot with smooth
 p <-
-  ggplot(CM.YWL, aes(x = Week, y = CMs)) +
+  ggplot(CMYWL, aes(x = Week, y = CMs)) +
   facet_wrap( ~ Species, scales = "free_y") +
   stat_smooth(
     method = "gam",
@@ -323,62 +337,48 @@ p <-
            title = "Calendar fits for NCR suction traps (2005-2017)"))
 p
 
-# save to pdf
-pdf("CMsByWeek_NCR2005-2016.pdf", h = 8.5, w = 11)
-p
-dev.off()
+# Write to pdf
+pdf("CMsByWeek_NCR2005-2016.pdf", h = 8.5, w = 11); p; dev.off()
 
 # predict intercepts
-YWLgam <- CM.YWL %>%
+YWLgam <- CMYWL %>%
   group_by(Species) %>%
   do(
     data.frame(
       Week = 1:52,
-      pred = predict.gam(gam(CMs ~ s(Week, k = 20), data = .))
+      CM = predict.gam(gam(CMs ~ s(Week, k = 20), data = .))
     )
   ) %>%
-  filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
+  filter(sign(lag(CM)) != sign(CM) | sign(lead(CM)) != sign(CM))
 YWLgam
-
-YWLgam <- CM.YWL %>%
-  group_by(Species) %>%
-  do(
-    data.frame(
-      Week = 1:52,
-      pred = predict.gam(gam(CMs ~ s(Week, k = 20), data = .))
-    )
-  ) %>%
-  filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
-YWLgam
-
 
 
 
 # CM: WL (single year by week + loc) ---------------------------------------------
 
-### define function ###
-rem.WL <- function(df) {
+# define function
+remWL <- function(df) {
+  require(lme4)
   fmod <-
     glmer(
       Count ~ 1 +
         (1 | Week) +
         (1 | Location),
       data = df,
-      family = "poisson",
-      control = glmerControl(optimizer ="Nelder_Mead") #fix 'degenerate hessian' warning
+      family = "poisson"
     )
   data.frame(Week = as.numeric(rownames(ranef(fmod)$Week)),
              CMs = ranef(fmod)$Week[, 1])
 }
 
 # generate CMs
-CM.WL <-
+CMWL <-
   aphid %>%
   group_by(Species = SpeciesName) %>%
   do(rem.WL(.))
 
 # plot results
-p <- ggplot(CM.WL, aes(x = Week, y = CMs)) +
+p <- ggplot(CMWL, aes(x = Week, y = CMs)) +
   facet_wrap( ~ Species, scales = "free_y") +
   stat_smooth(
     method = "gam",
@@ -399,7 +399,7 @@ p
 dev.off()
 
 # prediction function
-WLgam <- CM.WL %>%
+WLgam <- CMWL %>%
   group_by(Species) %>%
   do(
     data.frame(
@@ -410,11 +410,13 @@ WLgam <- CM.WL %>%
   filter(sign(lag(pred)) != sign(pred) | sign(lead(pred)) != sign(pred))
 WLgam
 
+
+
 # CMs by GDD ---------------------------------------------------------------
 
-
-### define random effects function ###
-remGDD <- function(df) {
+### define functions ###
+remfn <- function(df) {
+  require(lme4)
   fmod <-
     glmer(
       Count ~ 1 +
@@ -422,48 +424,54 @@ remGDD <- function(df) {
         (1 | Year) +
         (1 | SiteID), # location
       data = df,
-      family = "poisson",
-      control = glmerControl(optimizer = "Nelder_Mead") #fix 'degenerate hessian' warning
+      family = "poisson"
     )
   data.frame(GDD = as.numeric(rownames(ranef(fmod)$GDD39)),
              CM = ranef(fmod)$GDD39[, 1])
 }
-
-### generate CMs from GDD ###
-CM_GDD <-
-  aphid %>%
-  group_by(SpeciesName) %>%
-  do(remGDD(.))
-
-
-### Generate gam predictions ###
-GDDlist <- 1:7500
-gampreds <- CM_GDD %>%
-  group_by(SpeciesName) %>%
-  do(
-    data.frame(
-      GDD = GDDlist,
-      CM = predict.gam(gam(CM ~ s(GDD), data = .),
-                       data.frame(GDD = GDDlist))
+gampredfn <- function(df){
+  df %>%
+    group_by(SpeciesName) %>%
+    do(
+      data.frame(
+        GDD = 1:7500,
+        CM = predict.gam(gam(CM ~ s(GDD), data = .),
+                         data.frame(GDD = 1:7500))
+      )
     )
-  )
+}
+gamptfn <- function(df){
+  df %>%
+    mutate(
+      type = case_when(
+        sign(lag(CM)) < sign(CM) ~ "RI",         # rising intercept
+        sign(lag(CM)) > sign(CM) ~ "FI",        # falling intercept
+        lag(CM) < CM & CM > lead(CM) ~ "max", # local maxima
+        lag(CM) > CM & CM < lead(CM) ~ "min"  # local minima
+      )
+    ) %>%
+    na.omit()
+}
 
-### identify min, max, and intercepts ###
-gam_pts <- gampreds %>%
-  mutate(
-    type = case_when(
-      sign(lag(CM)) < sign(CM) ~ "RI",         # rising intercept
-      sign(lag(CM)) > sign(CM) ~ "FI",        # falling intercept
-      lag(CM) < CM & CM > lead(CM) ~ "max", # local maxima
-      lag(CM) > CM & CM < lead(CM) ~ "min"  # local minima
-    )
-  ) %>%
-  na.omit()
-gam_pts
+# generate CMs from GDD
+aphid %>%
+  group_by(SpeciesName) %>%
+  do(remfn(.)) ->
+  CMGDD
 
-### plot phenology curves ###
+# generate predictions from gam fit
+CMGDD %>%
+  do(gampredfn(.)) ->
+  gampreds
+
+# identify critical points
+gampreds %>%
+  do(gamptfn(.)) ->
+  gampts
+
+# plot phenology curves
 p <-
-  ggplot(CM_GDD, aes(x = GDD, y = CM)) +
+  ggplot(CMGDD, aes(x = GDD, y = CM)) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   stat_smooth(
@@ -472,22 +480,60 @@ p <-
     fill = "grey50",
     colour = "Black",
     size = 1.5
-    ) +
+  ) +
   geom_abline(intercept = 0, slope = 0) +
   labs(x = "GDDs",
        y = "CMs (GDD39/86)",
        title = paste("GDD39/86 fits for Suction Traps",
                      min(aphid$Year), "-", max(aphid$Year))
-       )
+  )
 p
 
-# add and label points of interest
-p + geom_point(data = gampreds, color = "red") +
-  geom_point(data = gam_pts, aes(x = GDD, y = CM)) +
-  geom_text(data = gam_pts, aes(x = GDD, y = CM, label = GDD), check_overlap = TRUE)
+# add and label points of interest from gam prediction
+p2 <- p +
+  geom_line(data = gampreds, color = "red", size = 1.5) +
+  geom_point(data = gampts, aes(x = GDD, y = CM)) +
+  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD))
+p2
 
 # write pdf
-pdf("out/STN_CMsByGDD.pdf", h = 8.5, w = 11); p; dev.off()
+pdf("out/STN_CMsByGDD.pdf", h = 8.5, w = 11); p2; dev.off()
+
+
+
+# GDD cross-validation ----------------------------------------------------
+
+# Cross-validation subsetting #
+CV.aphid <- list()
+CV.aphid[[1]] <- aphid %>% filter(Year < 2014) # First two-thirds
+CV.aphid[[2]] <- aphid %>% filter(Year > 2008) # Recent two-thirds
+CV.aphid[[3]] <- aphid %>% filter(Year < 2009 | Year > 2013) # Outside two-thirds
+CV.aphid[[4]] <- aphid %>% filter(Year > 2006 & Year < 2016) # middle two-thirds
+
+# generate CMs from each subset
+CV.CMGDD <- list()
+for (i in 1:4) {
+  CV.aphid[[i]] %>%
+    group_by(SpeciesName) %>%
+    do(remfn(.)) ->
+    CV.CMGDD[[i]]
+}
+
+# compute gam predictions from each subset
+CV.gampreds <- list()
+for (i in 1:4) {
+  CV.CMGDD[[i]] %>%
+    do(gampredfn(.)) ->
+    CV.gampreds[[i]]
+}
+
+# identify critical points on curve from each subset
+CV.gampts <- list()
+for (i in 1:4) {
+  CV.gampreds[[i]] %>%
+    do(gamptfn(.)) ->
+    CV.gampts[[i]]
+}
 
 
 
