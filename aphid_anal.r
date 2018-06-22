@@ -535,6 +535,28 @@ for (i in 1:4) {
     CV.gampts[[i]]
 }
 
+# cv plots
+pdf("out/STN_CMsByGDD_CV.pdf", h = 8.5, w = 11)
+p <- list()
+for (i in 1:4){
+  ggplot(CV.CMGDD[[i]], aes(x = GDD, y = CM)) +
+    facet_wrap(~ SpeciesName) +
+    scale_x_sqrt() +
+    scale_y_continuous(limits = c(-2, 2)) +
+    geom_abline(intercept = 0, slope = 0) +
+    labs(
+      x = "GDDs",
+      y = "CMs (GDD39/86)",
+      title = paste("GDD39/86 fits for Suction Traps (CV block ", i, ")", sep = "")
+    ) +
+    geom_line(data = CV.gampreds[[i]], color = "red", size = 1.5) +
+    geom_point(data = CV.gampts[[i]], aes(x = GDD, y = CM)) +
+    geom_label(data = CV.gampts[[i]], aes(x = GDD, y = CM, label = GDD)) ->
+    p[[i]]
+  print(p[[i]])
+}
+dev.off()
+
 
 
 ### Plots -------------------------------------------------------------------
