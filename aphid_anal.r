@@ -499,6 +499,20 @@ p2
 # write pdf
 pdf("out/STN_CMsByGDD.pdf", h = 8.5, w = 11); p2; dev.off()
 
+p3 <-
+  ggplot(CMGDD, aes(x = GDD, y = CM)) +
+  facet_wrap( ~ SpeciesName, scales = "free") +
+  scale_x_sqrt() +
+  geom_abline(intercept = 0, slope = 0) +
+  geom_line(data = gampreds, color = "red", size = 1.5) +
+  geom_point(data = gampts, aes(x = GDD, y = CM)) +
+  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD)) +
+  labs(x = "GDDs",
+       y = "CMs (GDD39/86)",
+       title = paste("GDD39/86 fits for Suction Traps (Full dataset)",
+                     min(aphid$Year), "-", max(aphid$Year))
+  )
+p3
 
 
 # GDD cross-validation ----------------------------------------------------
@@ -535,26 +549,79 @@ for (i in 1:4) {
     CV.gampts[[i]]
 }
 
-# cv plots
-pdf("out/STN_CMsByGDD_CV.pdf", h = 8.5, w = 11)
-p <- list()
-for (i in 1:4){
-  ggplot(CV.CMGDD[[i]], aes(x = GDD, y = CM)) +
-    facet_wrap(~ SpeciesName) +
+
+### generate crossvalidation plots ###
+
+
+plt_full <-
+  ggplot(CMGDD, aes(x = GDD, y = CM)) +
+  facet_wrap(~ SpeciesName) +
+  scale_x_sqrt() +
+  scale_y_continuous(limits = c(-2, 2)) +
+  geom_abline(intercept = 0, slope = 0) +
+  geom_line(data = gampreds, color = "red", size = 1.5) +
+  geom_point(data = gampts, aes(x = GDD, y = CM)) +
+  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD)) +
+  labs(
+    x = "GDDs",
+    y = "CMs (GDD39/86)",
+    title = paste(
+      "GDD39/86 fits for Suction Traps (Full dataset)",
+      min(aphid$Year),
+      "-",
+      max(aphid$Year)
+    )
+  )
+plt_full
+
+plt_cvs <- list()
+for (i in 1:4) {
+  plt_cvs[[i]] <-
+    ggplot(CV.CMGDD[[i]], aes(x = GDD, y = CM)) +
+    facet_wrap( ~ SpeciesName) +
     scale_x_sqrt() +
     scale_y_continuous(limits = c(-2, 2)) +
     geom_abline(intercept = 0, slope = 0) +
+    geom_line(data = CV.gampreds[[i]], color = "red", size = 1.5) +
+    geom_point(data = CV.gampts[[i]], aes(x = GDD, y = CM)) +
+    geom_label(data = CV.gampts[[i]], aes(x = GDD, y = CM, label = GDD)) +
     labs(
       x = "GDDs",
       y = "CMs (GDD39/86)",
-      title = paste("GDD39/86 fits for Suction Traps (CV block ", i, ")", sep = "")
-    ) +
-    geom_line(data = CV.gampreds[[i]], color = "red", size = 1.5) +
-    geom_point(data = CV.gampts[[i]], aes(x = GDD, y = CM)) +
-    geom_label(data = CV.gampts[[i]], aes(x = GDD, y = CM, label = GDD)) ->
-    p[[i]]
-  print(p[[i]])
+      title = paste(
+        "GDD39/86 fits for Suction Traps (Crossvalidation block ", i, ")", sep = "")
+    )
 }
+
+plt_overlay <-
+  ggplot(CMGDD, aes(x = GDD, y = CM)) +
+  facet_wrap(~ SpeciesName) +
+  scale_x_sqrt() +
+  scale_y_continuous(limits = c(-2, 2)) +
+  geom_abline(intercept = 0, slope = 0) +
+  geom_line(data = gampreds, color = "red", size = 1.5) +
+  geom_line(data = CV.gampreds[[1]], color = "black", size = .75, alpha = 0.5) +
+  geom_line(data = CV.gampreds[[2]], color = "black", size = .75, alpha = 0.5) +
+  geom_line(data = CV.gampreds[[3]], color = "black", size = .75, alpha = 0.5) +
+  geom_line(data = CV.gampreds[[4]], color = "black", size = .75, alpha = 0.5) +
+  labs(
+    x = "GDDs",
+    y = "CMs (GDD39/86)",
+    title = paste(
+      "GDD39/86 fits for Suction Traps (Full dataset & CV subsets)",
+      min(aphid$Year),
+      "-",
+      max(aphid$Year)
+    )
+  )
+plt_overlay
+
+
+# generate pdf
+pdf("out/STN_CMsByGDD_CV.pdf", h = 8.5, w = 11)
+plt_full
+plt_cvs
+plt_overlay
 dev.off()
 
 
