@@ -2,17 +2,14 @@
 import arcpy
 import os
 
-arcpy.CheckOutExtension("Spatial")
-
 # set environment variables
 arcpy.env.overwriteOutput = True
 arcpy.env.addOutputsToMap = False
-root = "D:/arc/aphids/buffers"
-arcpy.env.workspace = root
-pts = "d:/arc/aphids/buffers/aphid_pts.shp"
-sites = "d:/arc/aphids/buffers/sites"
-buffers = "d:/arc/aphids/buffers/buffers"
-tables = "d:/arc/aphids/buffers/tables"
+arcpy.env.workspace = "c:/arc/default.gdb"
+pts = "c:/arc/aphids/buffers/aphid_pts.shp"
+sites = "c:/arc/aphids/buffers/sites"
+buffers = "c:/arc/aphids/buffers/buffers"
+tables = "c:/arc/aphids/buffers/tables"
 rasters = "d:/gis_data/cropscape/national/filtered"
 
 
@@ -41,6 +38,7 @@ for shp in os.listdir(sites):
 				print(outFile + " exists!")
 			else:
 				arcpy.Buffer_analysis(inFile, outFile, dist)
+				print(outFile + " created!")
 
 # iterate rasters and ZH them
 # generate file lists
@@ -55,7 +53,6 @@ for file in os.listdir(rasters):
 		raster_list.append(os.path.join(rasters, file))
 
 # run zh
-nonce = 1
 for raster in raster_list:
 	rasterYear = os.path.basename(raster).split("_")[1]
 	inValueRaster = raster
@@ -72,7 +69,6 @@ for raster in raster_list:
 			print(outTable + " exists!")
 		else:
 			arcpy.sa.ZonalHistogram(inZoneData, ZoneField, inValueRaster, outTable)
-		if nonce == 1:
-			break
-	if nonce == 1:
-		break
+			print(outTable + " created!")
+print("Processing complete.")
+
