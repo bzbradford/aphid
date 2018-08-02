@@ -1,33 +1,39 @@
+# Script to collect dbf files from arcpy output
+# and merge into single data frame
+
+
 library(foreign)
 library(tidyverse)
 
-setwd("c:/arc/aphids/buffers/tables")   ## location of folder structure
+# specify location of folder structure
+oldwd <- getwd()
+setwd("c:/arc/aphids/buffers/tables")  
 
-
-if(file.exists("merge.dbf")){  ## remove previous merge files
-  file.remove("merge.dbf")
-}
-
-files <- list.files(pattern = "dbf$")  ## get list of files in folder
+# generate file list
+files <- list.files(pattern = "dbf$")
 numfiles <- length(files)
 
-
-for (i in 1:numfiles) { ## append each dbf to working file
+for (i in 1:numfiles) {
   if(i == 1) {
-    all = data.frame()
+    merge <- data.frame() # initialize
     }
-  infile = read.dbf(files[i])
-  infile = filter(infile, infile[2] > 0)
-  names(infile) = c("Class", "Pixels")
-  vars = unlist(strsplit(gsub(".dbf", "", files[i]), "_"))
-  infile = infile %>%
-    add_column(Site = vars[1],
-               Buffer_m = as.numeric(gsub("m", "", vars[2])),
-               Year = as.numeric(vars[3]),
+  infile <- read.dbf(files[i])
+  infile <- filter(infile, infile[2] > 0) # remove nonzero counts (count must be 2nd column)
+  names(infile) <- c("Class", "Pixels") # rename columns
+  parse <- unlist(strsplit(gsub(".dbf", "", files[i]), "_")) # parse SITE, BUFFER, YEAR from filename
+  infile <- infile %>%
+    add_column(Site = parse[1],
+               Buffer_m = as.numeric(gsub("m", "", parse[2])),
+               Year = as.numeric(parse[3]),
                .before = "Class")
-  all = bind_rows(all, infile)
+  infile$Class <- gsub("_", " ", infile$Class) # swap _ for space in class names
+  merge <- bind_rows(merge, infile) # add latest block to growing data frame
 }
+merge$Class = as.factor(merge$Class) # return to factor from character vector
 
-all$Class = as.factor(all$Class)
+# clean up
+setwd(oldwd)
+rm(oldwd, files, numfiles, infile, parse)
 
-write.csv(all, file = "~merge.csv")  ## write output file
+# output if desired
+write.csv(merge, file = "buffers.csv")  ## write output file
