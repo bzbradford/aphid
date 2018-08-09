@@ -6,10 +6,11 @@ import os
 arcpy.env.overwriteOutput = True
 arcpy.env.addOutputsToMap = False
 arcpy.env.workspace = "C:/ArcGIS/Default.gdb"
-pts = "L:/aphids/gis/aphid_pts.shp"
-sites = "L:/aphids/gis/sites"
-buffers = "L:/aphids/gis/buffers"
-tables = "L:/aphids/gis/tables"
+root = "C:/ArcGIS/aph/"
+pts = root + "aphid_pts.shp"
+sites = root + "sites"
+buffers = root + "buffers"
+tables = root + "tables"
 rasters = "D:/gis_data/cropscape/national/filtered"
 
 
