@@ -78,6 +78,7 @@ aphid <-
   ) %>%
   droplevels()
 
+
 # Species list 2: PVY-relevant species
 aphid <-
   aph_full %>%
@@ -101,6 +102,7 @@ aphid <-
   ) %>%
   droplevels()
 
+
 # Just four species
 aphid <-
   aph_full %>%
@@ -114,8 +116,9 @@ aphid <-
   ) %>%
   droplevels()
 
+
 # Select by top n species
-aph.topsp <- function(df, n) {
+topSpFn <- function(df, n) {
   top <-
     df %>%
     group_by(SpeciesName) %>%
@@ -126,17 +129,55 @@ aph.topsp <- function(df, n) {
     filter(SpeciesName %in% top$SpeciesName) %>%
     droplevels()
 }
-aphid <- aph.topsp(aph_full, 9)
+aphid <- topSpFn(aph_full, 10)
+
+# Top spp in wisconsin
+aphid <- aph_full %>%
+  filter(State == "WI") %>%
+  topSpFn(10)
 
 
-
-# Quick data summaries of subset ------------------------------------------------
+# Numerical summaries of subset ------------------------------------------------
 
 # summarise by total count
 aphid %>%
   group_by(SpeciesName) %>%
   summarise(TotalCount = sum(Count), n = n()) %>%
-  arrange(desc(TotalCount))
+  arrange(desc(TotalCount)) %>%
+  write.csv("out/totalCount.csv")
+
+
+# generate annual count summaries and a total count by species, then save
+a <- aphid %>%
+  select(SpeciesName, Year, Count) %>%
+  group_by(SpeciesName, Year) %>%
+  summarise(TotalCount = sum(Count)) %>%
+  ungroup(Year) %>%
+  spread(Year, TotalCount)
+b <- aphid %>%
+  group_by(SpeciesName) %>%
+  summarise(TotalCount = sum(Count))
+left_join(a, b) %>%
+  write.csv("out/totalCount.csv")
+
+
+# piped method of the above
+totCt <-
+  left_join({
+    aphid %>%
+      select(SpeciesName, Year, Count) %>%
+      group_by(SpeciesName, Year) %>%
+      summarise(TotalCount = sum(Count)) %>%
+      ungroup(Year) %>%
+      spread(Year, TotalCount)
+  },
+  {
+    aphid %>%
+      group_by(SpeciesName) %>%
+      summarise(TotalCount = sum(Count))
+  })
+totCt %>% write.csv("out/totalCount.csv")
+
 
 # unique species per state
 aphidlong %>%
@@ -145,12 +186,14 @@ aphidlong %>%
   mutate(SpeciesName = as.character(SpeciesName)) %>%
   summarise(N_Taxa = length(unique(SpeciesName)))
 
+
 # unique sites per state
 aphidlong %>%
   filter(Count > 0) %>%
   group_by(State) %>%
   mutate(SiteID = as.character(SiteID)) %>%
   summarise(N_Sites = length(unique(SiteID)))
+
 
 
 # Species diversity from full aphid dataset -----------------------------
