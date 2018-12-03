@@ -195,8 +195,8 @@ gampts <-
   do(gamptfn(.))
 
 # plot phenology curves
-p <-
-  ggplot(CMGDD, aes(x = GDD, y = CM)) +
+p <- CMGDD %>%
+  ggplot(aes(x = GDD, y = CM)) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   stat_smooth(
@@ -219,8 +219,18 @@ p
 p2 <- p +
   geom_line(data = gampreds, color = "red", size = 1.5) +
   geom_point(data = gampts, aes(x = GDD, y = CM)) +
-  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD))
+  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD), check_overlap = TRUE)
 p2
+
+# add and label points without borders of interest from gam prediction
+p2 <- p +
+  geom_line(data = gampreds, color = "red", size = 1.5) +
+  geom_text(data = gampts,
+            aes(x = GDD, y = CM, label = GDD),
+            check_overlap = TRUE,
+            size = 3)
+p2
+
 
 # Get sample size
 aphid %>%

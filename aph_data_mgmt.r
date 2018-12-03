@@ -3,12 +3,12 @@ library(tidyverse)
 # Read in data ------------------------------------------------------------
 
 # read aphid counts (including dummy counts)
-aph_in <-
+aphid_in <-
   read.csv(file.choose(), header = TRUE, na = c('','.')) %>%
   mutate(Date = as.Date(Date))
 
 # read species names
-aph_spp <- read.csv("data/aphidsp.csv", header = TRUE, na = c('','.'))
+aphid_spp <- read.csv("data/aphidsp.csv", header = TRUE, na = c('','.'))
 
 # read prism data
 prism <-
@@ -33,23 +33,23 @@ expandfn <- function(df) {
     filter(SpeciesName != "_dummy_") %>%
     droplevels()
 }
-aph_full <- expandfn(aph_in)
+aphid_full <- expandfn(aphid_in)
 
 # Join GDD data with aphid data
-aph_full <-
-  aph_full %>%
+aphid_full <-
+  aphid_full %>%
   left_join(prism[, c("SiteID", "Date", "GDD39", "GDD50")],
             by = c("SiteID", "Date")) %>%
   mutate(SiteID = as.factor(SiteID))
 
 # Join aphid names to dataset
-aph_full <-
-  aph_full %>%
-  left_join(aph_spp, by = "SpeciesName") %>%
+aphid_full <-
+  aphid_full %>%
+  left_join(aphid_spp, by = "SpeciesName") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
 
 # Export file (optional)
-aph_full %>%
+aphid_full %>%
   filter(Count > 0) %>%
   arrange(SiteName, Date) %>%
   write.csv("aphidlong.csv", na = "")
@@ -58,9 +58,9 @@ aph_full %>%
 
 # Aphid data subset options -------------------------------------
 
-# Species list 1 (from Frost code)
+# Species list from Frost code
 aphid <-
-  aph_full %>%
+  aphid_full %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -79,33 +79,9 @@ aphid <-
   droplevels()
 
 
-# Species list 2: PVY-relevant species
-aphid <-
-  aph_full %>%
-  filter(
-    SpeciesName %in% c(
-      "Myzus persicae",
-      "Macrosiphum euphorbiae",
-      "Aphis glycines",
-      "Acyrthosiphon pisum",
-      "Rhopalosiphum padi",
-      "Capitophorus elaeagni",
-      "Schizaphis graminum",
-      "Aphis craccivora",
-      "Sitobion avenae",
-      "Rhopalosiphum maidis",
-      "Brachycaudus helichrysi",
-      "Brevicoryne brassicae",
-      "Hayhurstia atriplicis",
-      "Lipaphis pseudobrassicae"
-    )
-  ) %>%
-  droplevels()
-
-
 # Just four species
 aphid <-
-  aph_full %>%
+  aphid_full %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -129,12 +105,16 @@ topSpFn <- function(df, n) {
     filter(SpeciesName %in% top$SpeciesName) %>%
     droplevels()
 }
-aphid <- topSpFn(aph_full, 10)
+aphid <- topSpFn(aphid_full, 10)
 
 # Top spp in wisconsin
-aphid <- aph_full %>%
+aphid <- aphid_full %>%
   filter(State == "WI") %>%
   topSpFn(10)
+
+# Wisconsin only
+aphid <- aphid %>% 
+  filter(State == "WI")
 
 
 # Numerical summaries of subset ------------------------------------------------
@@ -180,6 +160,7 @@ totCt %>% write.csv("out/totalCount.csv")
 
 # generate weekly mean counts
 aphid %>%
+  filter(State == "WI") %>%
   select(SpeciesName, Week, Count) %>%
   group_by(SpeciesName, Week) %>%
   summarise(MeanCount = mean(Count)) %>%
@@ -275,7 +256,7 @@ pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); pltByState; dev.off()
 
 ### Counts by year ###
 pltByYear <-
-  aphid %>%
+  aphid %>% filter(State == "WI") %>%
   group_by(Year, SpeciesName) %>%
   summarise(totcount = sum(Count)) %>%
   arrange(SpeciesName, desc(totcount)) %>%
