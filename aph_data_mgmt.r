@@ -178,6 +178,14 @@ totCt <-
   })
 totCt %>% write.csv("out/totalCount.csv")
 
+# generate weekly mean counts
+aphid %>%
+  select(SpeciesName, Week, Count) %>%
+  group_by(SpeciesName, Week) %>%
+  summarise(MeanCount = mean(Count)) %>%
+  write.csv("out/wi_wkly.csv")
+
+
 
 # unique species per state
 aphidlong %>%
@@ -269,7 +277,7 @@ pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); pltByState; dev.off()
 pltByYear <-
   aphid %>%
   group_by(Year, SpeciesName) %>%
-  summarise(totcount = mean(Count)) %>%
+  summarise(totcount = sum(Count)) %>%
   arrange(SpeciesName, desc(totcount)) %>%
   ggplot(aes(x = as.factor(Year), y = totcount)) +
   facet_wrap(~ reorder(SpeciesName, -totcount)) +
@@ -284,6 +292,7 @@ pltByYear <-
                      "): Captures by Year",
                      sep = '')) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        strip.text = element_text(size = 12, face = "bold"),
         legend.position = "none")
 pltByYear
 pdf("out/STN_CountsByYear.pdf", h = 8.5, w = 11); pltByYear; dev.off()
@@ -300,7 +309,7 @@ pltByStateYear <-
   geom_bar(stat = "identity", aes(fill = State)) +
   scale_y_sqrt() +
   labs(x = "",
-       y = "Mean Count",
+       y = "Mean Count/Week",
        title = paste("Aphid Suction Trap Network (",
                      min(aphid$Year),
                      "-",
