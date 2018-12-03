@@ -2,9 +2,10 @@
 ### Conditional mode plots of aphid phenology
 ###
 
-library(tidyverse)
-library(ggplot2)
 library(lme4)
+library(mgcv)
+library(ggplot2)
+library(tidyverse)
 
 # CM: Year + Week + Loc ----------------------------------------------
 
@@ -178,20 +179,20 @@ gamptfn <- function(df){
 }
 
 # generate CMs from GDD
-aphid %>%
+CMGDD <-
+  aphid %>%
   group_by(SpeciesName) %>%
-  do(remfn(.)) ->
-  CMGDD
+  do(remfn(.))
 
 # generate predictions from gam fit
-CMGDD %>%
-  do(gampredfn(.)) ->
-  gampreds
+gampreds <-
+  CMGDD %>%
+  do(gampredfn(.))
 
 # identify critical points
-gampreds %>%
-  do(gamptfn(.)) ->
-  gampts
+gampts <-
+  gampreds %>%
+  do(gamptfn(.))
 
 # plot phenology curves
 p <-
@@ -210,7 +211,8 @@ p <-
        y = "CMs (GDD39/86)",
        title = paste("GDD39/86 fits for Suction Traps",
                      min(aphid$Year), "-", max(aphid$Year))
-  )
+  ) +
+  theme(strip.text = element_text(size = 14, face = "bold"))
 p
 
 # add and label points of interest from gam prediction
@@ -219,6 +221,15 @@ p2 <- p +
   geom_point(data = gampts, aes(x = GDD, y = CM)) +
   geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD))
 p2
+
+# Get sample size
+aphid %>%
+  filter(Count > 0) %>%
+  group_by(SpeciesName) %>%
+  summarise(Samples = n(),
+            Count = sum(Count),
+            Mean = sum(Count)/n()
+  )
 
 # write pdf
 pdf("out/STN_CMsByGDD.pdf", h = 8.5, w = 11); p2; dev.off()
@@ -235,7 +246,8 @@ p3 <-
        y = "CMs (GDD39/86)",
        title = paste("GDD39/86 fits for Suction Traps (Full dataset)",
                      min(aphid$Year), "-", max(aphid$Year))
-  )
+  ) +
+  theme(strip.text = element_text(size = 14, face = "bold"))
 p3
 
 
