@@ -4,7 +4,6 @@
 
 library(lme4)
 library(mgcv)
-library(ggplot2)
 library(tidyverse)
 
 # CM: Year + Week + Loc ----------------------------------------------
@@ -178,9 +177,36 @@ gamptfn <- function(df){
     na.omit()
 }
 
+### TEST OPTIMIZATION ###
+#devtools::install_github("hadley/multidplyr")
+require(multidplyr)
+CMGDD_test <-
+  aphid2 %>%
+  partition(SpeciesName) %>%
+  do({
+    require(lme4)
+    fmod = ranef(glmer(
+      Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+      data = .,
+      family = "poisson"
+    ))
+    data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
+               CM = fmod$GDD39[, 1])
+  }) %>%
+  collect()
+
+
 # generate CMs from GDD
 CMGDD <-
   aphid %>%
+  group_by(SpeciesName) %>%
+  do(remfn(.))
+
+# CMs from PVY Risk
+CMGDD_PVY <-
+  aphid %>%
+  mutate(SpeciesName = "Aphid", Count = PVYRisk) %>%
+  select(SpeciesName, Count, Year, GDD39, SiteID) %>%
   group_by(SpeciesName) %>%
   do(remfn(.))
 
