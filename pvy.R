@@ -9,6 +9,15 @@ names(pvy_inf) <- c("SpeciesName", "InfLow", "InfUp", "InfAvg")
 
 # Filters -----------------------------------------------------------------
 
+aphid <- aphid_full %>%
+  left_join(pvy_inf) %>%
+  mutate(SpeciesName = as.factor(SpeciesName)) %>%
+  drop_na(InfAvg) %>%
+  mutate(PVYRisk = log(Count + 1)*asin(sqrt(InfAvg))) %>%
+  droplevels()
+
+
+
 # all potential pvy vectors
 aphid <-
   aphid_full %>%
