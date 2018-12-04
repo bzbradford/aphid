@@ -4,7 +4,7 @@ library(tidyverse)
 
 # read aphid counts (including dummy counts)
 aphid_in <-
-  read.csv(file.choose(), header = TRUE, na = c('','.')) %>%
+  read.csv("data/aphid.csv", header = TRUE, na = c('','.')) %>%
   mutate(Date = as.Date(Date))
 
 # read species names
@@ -20,7 +20,7 @@ prism <-
 # Data preparation ---------------------------------------------------------
 
 # Expand dataset with zeros, drop dummy variable #
-expandfn <- function(df) {
+expandFn <- function(df) {
   cols <- ncol(df)
   df %>%
     spread(SpeciesName,
@@ -33,7 +33,7 @@ expandfn <- function(df) {
     filter(SpeciesName != "_dummy_") %>%
     droplevels()
 }
-aphid_full <- expandfn(aphid_in)
+aphid_full <- expandFn(aphid_in)
 
 # Join GDD data with aphid data
 aphid_full <-
@@ -52,7 +52,7 @@ aphid_full <-
 aphid_full %>%
   filter(Count > 0) %>%
   arrange(SiteName, Date) %>%
-  write.csv("aphidlong.csv", na = "")
+  write.csv("aphid_full.csv", na = "")
 
 
 
@@ -105,16 +105,19 @@ topSpFn <- function(df, n) {
     filter(SpeciesName %in% top$SpeciesName) %>%
     droplevels()
 }
+
+# Select top spp by count in entire dataset
 aphid <- topSpFn(aphid_full, 10)
 
-# Top spp in wisconsin
+# Select top spp in wisconsin
 aphid <- aphid_full %>%
   filter(State == "WI") %>%
   topSpFn(10)
 
-# Wisconsin only
+# Filter Wisconsin only
 aphid <- aphid %>% 
   filter(State == "WI")
+
 
 
 # Numerical summaries of subset ------------------------------------------------
@@ -128,20 +131,6 @@ aphid %>%
 
 
 # generate annual count summaries and a total count by species, then save
-a <- aphid %>%
-  select(SpeciesName, Year, Count) %>%
-  group_by(SpeciesName, Year) %>%
-  summarise(TotalCount = sum(Count)) %>%
-  ungroup(Year) %>%
-  spread(Year, TotalCount)
-b <- aphid %>%
-  group_by(SpeciesName) %>%
-  summarise(TotalCount = sum(Count))
-left_join(a, b) %>%
-  write.csv("out/totalCount.csv")
-
-
-# piped method of the above
 totCt <-
   left_join({
     aphid %>%
@@ -158,6 +147,7 @@ totCt <-
   })
 totCt %>% write.csv("out/totalCount.csv")
 
+
 # generate weekly mean counts
 aphid %>%
   filter(State == "WI") %>%
@@ -167,9 +157,8 @@ aphid %>%
   write.csv("out/wi_wkly.csv")
 
 
-
 # unique species per state
-aphidlong %>%
+aphid_full %>%
   filter(Count > 0) %>%
   group_by(State) %>%
   mutate(SpeciesName = as.character(SpeciesName)) %>%
@@ -177,18 +166,17 @@ aphidlong %>%
 
 
 # unique sites per state
-aphidlong %>%
+aphid_full %>%
   filter(Count > 0) %>%
   group_by(State) %>%
-  mutate(SiteID = as.character(SiteID)) %>%
-  summarise(N_Sites = length(unique(SiteID)))
+  summarise(N_Sites = length(levels(droplevels(SiteID))))
 
 
 
 # Species diversity from full aphid dataset -----------------------------
 
 f <- function(x) {length(unique(as.character(x)))} # returns number of unique factors
-aphidlong %>%
+aphid_full %>%
   filter(Count > 0) %>%
   group_by(State) %>%
   summarise(Sites = f(SiteID),
@@ -202,7 +190,7 @@ aphidlong %>%
   add_column(MeanCt = .$TotCt/.$Samples)
 
 # summarise by frequency
-aphidlong %>%
+aphid_full %>%
   mutate(isFound = case_when(Count == 0 ~ 0, Count > 0 ~ 1)) %>%
   group_by(SpeciesName) %>%
   summarise(Freq = sum(isFound)/n()) %>%
@@ -215,7 +203,7 @@ aphid %>%
   summarise(Obs = n())
 
 # weeks per year
-aphidlong %>%
+aphid_full %>%
   group_by(Year) %>%
   summarise(N_Weeks = length(unique(Week)),
             N_Captures = sum(Count))
@@ -223,7 +211,6 @@ aphidlong %>%
 
 
 # Summary plots -------------------------------------------
-library(ggplot2)
 
 ### group by state ###
 pltByState <-
@@ -306,91 +293,49 @@ pltByStateYear <-
 pltByStateYear
 pdf("out/STN_CaptureByYearAndState.pdf", h = 8.5, w = 11); pltByStateYear; dev.off()
 
+
 # counts by GDD; facets by species
-a <- ggplot(aphid, aes(x = GDD, y = log10(Count + 1), color = as.factor(Year))) +
+p <- aphid %>%
+  ggplot(aes(x = GDD, y = log10(Count + 1), color = as.factor(Year))) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   scale_y_sqrt() +
-  stat_smooth(
-    method = "gam",
-    formula = y ~ s(x),
-    fill = NA,
-    size = .5
-  ) +
+  stat_smooth(method = "gam", formula = y ~ s(x), fill = NA, size = .5) +
   geom_abline(intercept = 0, slope = 0) +
   labs(aes(x = "Growing Degree Days (50F/86F)",
            y = "Log10 Count of Aphids",
-           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2016",
+           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2017",
            legend = "Year"))
-a
-pdf("multiyear NCR aphid phenology by GDD.pdf", h = 8.5, w = 11)
-a
-dev.off()
+p
+pdf("multiyear NCR aphid phenology by GDD.pdf", h = 8.5, w = 11); p; dev.off()
+
 
 # multi-year comparison of counts by week
-b <- ggplot(aphid, aes(x = Week, y = log10(Count + 1), color = as.factor(Year))) +
+p <- aphid %>%
+  ggplot(aes(x = Week, y = log10(Count + 1), color = as.factor(Year))) +
   facet_wrap( ~ SpeciesName, scales = "free") +
-  stat_smooth(
-    method = "gam",
-    formula = y ~ s(x),
-    fill = NA,
-    size = .5
-  ) +
+  stat_smooth(method = "gam", formula = y ~ s(x), fill = NA, size = .5) +
   geom_abline(intercept = 0, slope = 0) +
   labs(aes(x = "Week",
            y = "Log10 Count of Aphids",
-           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2016",
+           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2017",
            legend = "Year"))
-b
-pdf("multiyear NCR aphid phenology by Week.pdf", h = 8.5, w = 11)
-b
-dev.off()
-
-b <- ggplot(aphid, aes(x = Week, y = log10(Count + 1), color = Year)) +
-  facet_wrap( ~ SpeciesName, scales = "free") +
-  geom_smooth(
-    method = "gam",
-    formula = y ~ s(x),
-    fill = "grey50",
-    size = 1
-  ) +
-  stat_density() +
-  geom_abline(intercept = 0, slope = 0) +
-  labs(aes(x = "Week",
-           y = "Log10 Count of Aphids",
-           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2016",
-           legend = "Year"))
-b
-
-pdf("multiyear NCR aphid phenology by Week.pdf", h = 8.5, w = 11)
-b
-dev.off()
+p
+pdf("multiyear NCR aphid phenology by Week.pdf", h = 8.5, w = 11); p; dev.off()
 
 
-
-b <- ggplot(aphid, aes(x = as.factor(Year), y = log10(Count + 1), group = Year, color = as.factor(Year))) +
+p <- aphid %>%
+  ggplot(aes(x = as.factor(Year), y = log10(Count + 1), group = Year, color = as.factor(Year))) +
   geom_boxplot() +
   facet_grid(SpeciesName ~ .) +
   geom_jitter(size = 0.1, alpha = 0.1) +
-  geom_smooth(
-    method = "gam",
-    formula = y ~ s(x) + 1,
-    fill = "grey50",
-    size = 1
-  )
-b
+  geom_smooth( method = "gam", formula = y ~ s(x) + 1, fill = "grey50", size = 1)
+p
 
-b <- ggplot(subset(aphid, Year == 2016), aes(x = Julian, y = log10(Count + 1))) +
+p <- subset(aphid, Year == 2016) %>%
+  ggplot(aes(x = Julian, y = log10(Count + 1))) +
   facet_grid(SpeciesName ~ .) +
   geom_ribbon(aes(ymin = 0, ymax = 2))
-b
-
-
-
-
-pdf("SpCountsByYear.pdf", h = 11, w = 8.5)
-b
-dev.off()
-
+p
 
 
