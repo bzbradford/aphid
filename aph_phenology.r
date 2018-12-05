@@ -141,17 +141,13 @@ WLgam
 ### define functions ###
 remfn <- function(df) {
   require(lme4)
-  fmod <-
-    glmer(
-      Count ~ 1 +
-        (1 | GDD39) +
-        (1 | Year) +
-        (1 | SiteID), # location
-      data = df,
-      family = "poisson"
-    )
-  data.frame(GDD = as.numeric(rownames(ranef(fmod)$GDD39)),
-             CM = ranef(fmod)$GDD39[, 1])
+  fmod = ranef(glmer(
+    Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+    data = df,
+    family = "poisson"
+  ))
+  data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
+             CM = fmod$GDD39[, 1])
 }
 gampredfn <- function(df){
   df %>%
@@ -197,22 +193,14 @@ CMGDD_test <-
 
 
 # generate CMs from GDD
-CMGDD <-
+cm_gdd <-
   aphid %>%
-  group_by(SpeciesName) %>%
-  do(remfn(.))
-
-# CMs from PVY Risk
-CMGDD_PVY <-
-  aphid %>%
-  mutate(SpeciesName = "Aphid", Count = PVYRisk) %>%
-  select(SpeciesName, Count, Year, GDD39, SiteID) %>%
   group_by(SpeciesName) %>%
   do(remfn(.))
 
 # generate predictions from gam fit
 gampreds <-
-  CMGDD %>%
+  cm_gdd %>%
   do(gampredfn(.))
 
 # identify critical points
@@ -221,7 +209,7 @@ gampts <-
   do(gamptfn(.))
 
 # plot phenology curves
-p <- CMGDD %>%
+p <- cm_gdd %>%
   ggplot(aes(x = GDD, y = CM)) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
@@ -245,7 +233,7 @@ p
 p2 <- p +
   geom_line(data = gampreds, color = "red", size = 1.5) +
   geom_point(data = gampts, aes(x = GDD, y = CM)) +
-  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD), check_overlap = TRUE)
+  geom_label(data = gampts, aes(x = GDD, y = CM, label = GDD))
 p2
 
 # add and label points without borders of interest from gam prediction
