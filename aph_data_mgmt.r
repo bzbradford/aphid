@@ -3,9 +3,17 @@ library(tidyverse)
 # Read in data ------------------------------------------------------------
 
 # read aphid counts (including dummy counts)
-aphid_in <-
+aphid_in =
   read.csv("data/aphid.csv", header = TRUE, na = c('','.')) %>%
   mutate(Date = as.Date(Date))
+
+
+
+
+
+aphid_in = read.csv("data/aphid.csv", header = TRUE, na = c('','.'))
+
+
 
 # read species names
 aphid_spp <- read.csv("data/aphidsp.csv", header = TRUE, na = c('','.'))
@@ -220,21 +228,24 @@ pltByState <-
   arrange(SpeciesName, desc(totcount)) %>%
   ggplot(aes(
     x = reorder(SpeciesName, totcount),
-    y = totcount,
-    color = SpeciesName
+    y = totcount
   )) +
-  facet_grid(~ State) +
+  facet_grid( ~ State) +
   geom_bar(stat = "identity") +
   scale_y_sqrt() +
   coord_flip() +
-  labs(x = "",
-       y = "Mean Count",
-       title = paste("Aphid Suction Trap Network (",
-                     min(aphid$Year),
-                     "-",
-                     max(aphid$Year),
-                     "): Captures by State",
-                     sep = '')) +
+  labs(
+    x = "",
+    y = "Mean Count",
+    title = paste(
+      "Aphid Suction Trap Network (",
+      min(aphid$Year),
+      "-",
+      max(aphid$Year),
+      "): Captures by State",
+      sep = ''
+    )
+  ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "none")
 pltByState
@@ -296,16 +307,27 @@ pdf("out/STN_CaptureByYearAndState.pdf", h = 8.5, w = 11); pltByStateYear; dev.o
 
 # counts by GDD; facets by species
 p <- aphid %>%
-  ggplot(aes(x = GDD, y = log10(Count + 1), color = as.factor(Year))) +
-  facet_wrap( ~ SpeciesName, scales = "free") +
+  ggplot(aes(
+    x = GDD,
+    y = log10(Count + 1),
+    color = as.factor(Year)
+  )) +
+  facet_wrap(~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   scale_y_sqrt() +
-  stat_smooth(method = "gam", formula = y ~ s(x), fill = NA, size = .5) +
+  stat_smooth(
+    method = "gam",
+    formula = y ~ s(x),
+    fill = NA,
+    size = .5
+  ) +
   geom_abline(intercept = 0, slope = 0) +
-  labs(aes(x = "Growing Degree Days (50F/86F)",
-           y = "Log10 Count of Aphids",
-           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2017",
-           legend = "Year"))
+  labs(
+    x = "Growing Degree Days (50F/86F)",
+    y = "Log10 Count of Aphids",
+    title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2017",
+    legend = "Year"
+  )
 p
 pdf("multiyear NCR aphid phenology by GDD.pdf", h = 8.5, w = 11); p; dev.off()
 
@@ -338,4 +360,69 @@ p <- subset(aphid, Year == 2016) %>%
   geom_ribbon(aes(ymin = 0, ymax = 2))
 p
 
+
+
+# Russ charts -------------------------------------------------------------
+
+
+# Top 5 wis aphids
+aphid <-
+  aphid_full %>%
+  filter(
+    SpeciesName %in% c(
+      "Aphis glycines",
+      "Acyrthosiphon pisum",
+      "Rhopalosiphum padi",
+      "Rhopalosiphum maidis",
+      "Myzus persicae"
+    )
+  ) %>%
+  droplevels()
+
+
+aphid %>%
+  group_by(Year, Week, SpeciesName) %>%
+  summarize(TotCount = sum(Count)) %>%
+  ggplot(aes(x = Week, y = TotCount)) +
+  geom_area(aes(fill = SpeciesName)) +
+  facet_grid(Year ~ SpeciesName) +
+  scale_y_log10() +
+  labs(x = "Week of Year",
+       y = "Log abundance") +
+  theme(panel.spacing = unit(.1, "lines"),
+        axis.text.y = element_blank(),
+        legend.position = "none")
+
+
+# best one
+aphid %>%
+  group_by(Year, Week, SpeciesName) %>%
+  summarize(TotCount = log(sum(Count)+1)) %>%
+  ggplot(aes(x = as.Date("2017-01-01")+(Week-1)*7, y = TotCount)) +
+  geom_area(aes(fill = SpeciesName)) +
+  facet_grid(Year ~ SpeciesName, scales = "free_x") +
+  scale_x_date(date_labels = "%b") +
+  labs(x = "Week of Year",
+       y = "Log abundance") +
+  theme(panel.spacing = unit(.1, "lines"),
+        strip.text.x = element_text(size = 12, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none")
+
+
+
+# experimental
+aphid %>%
+  group_by(Year, Week, SpeciesName) %>%
+  summarize(TotCount = log(sum(Count))) %>%
+  ggplot(aes(Week, TotCount)) +
+  geom_ribbon(aes(ymin = -TotCount, ymax = TotCount, x = Week, fill = SpeciesName)) +
+  facet_grid(Year ~ SpeciesName, scales = "free") +
+  labs(x = "Week of Year",
+       y = "Log abundance") +
+  theme(panel.spacing = unit(.1, "lines"),
+        axis.text.y = element_blank(),
+        legend.position = "none") +
+  theme_linedraw()
 
