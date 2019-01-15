@@ -10,8 +10,7 @@ files = choose.files() # pick prism output sheets
 # append all prism files into single data frame
 for (i in 1:length(files)){
   if (i == 1) {prism_in = NULL} # clear temp file on first loop
-  prism_in <-
-    rbind(prism_in, read.csv(files[i], skip = 10)) # append each file
+  prism_in <- rbind(prism_in, read.csv(files[i], skip = 10)) # append each file
 }
 
 # assign column names
@@ -30,7 +29,7 @@ fn.gdd <- function(tmin, tmax, lower = 50, upper = 86) {
 }
 
 # compute new columns
-prism_join = prism_in %>%
+prism_join <- prism_in %>%
   mutate(Date = as.Date(Date),
          Year = format(Date, "%Y")) %>%
   group_by(SiteID, Year) %>%
@@ -39,8 +38,11 @@ prism_join = prism_in %>%
          GDD50 = cumsum(fn.gdd(tminF, tmaxF, 50, 86))) %>%
   ungroup()
 
-# add new data to prism
-prism <- rbind(prism, prism_join)
+
+prism <- rbind(prism, prism_join) # add new data to existing prism
+prism <- prism_join # OR don't join to existing prism, replace
+rm(prism_join)
+
 
 # fix column types
 prism$SiteID <- as.factor(prism$SiteID)
@@ -48,4 +50,4 @@ prism$Year <- as.integer(prism$Year)
 str(prism)
 
 # save prism data
-prism %>% write.csv("prism.csv")
+prism %>% write.csv("data/prism.csv")

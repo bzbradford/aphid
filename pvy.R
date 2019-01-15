@@ -73,8 +73,6 @@ aphid_pvy_aggr <-
 
 
 
-
-
 # Summaries ---------------------------------------------------------------
 
 # generate weekly mean risk scores
