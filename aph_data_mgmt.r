@@ -358,6 +358,9 @@ p
 
 # Russ charts Jan 2019 ---------------------------------------------------------
 
+library(tidyverse)
+library(Cairo)
+
 # Top 5 wis aphids
 russ_aphids <- c(
   "Aphis glycines",
@@ -387,7 +390,8 @@ aphid <-
 #         legend.position = "none")
 
 # all species same graph
-aphid %>%
+p <-
+  aphid %>%
   group_by(Year, Week, SpeciesName) %>%
   summarize(TotCount = log(sum(Count)+1)) %>%
   ggplot(aes(x = as.Date("2017-01-01")+(Week-1)*7, y = TotCount)) +
@@ -398,9 +402,12 @@ aphid %>%
        y = "Log abundance") +
   theme(panel.spacing = unit(.1, "lines"),
         strip.text.x = element_text(size = 12, face = "bold"),
+        strip.text.y = element_text(size = 12, face = "bold"),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         legend.position = "none")
+p
+CairoPNG("out/russ aphids same graph.png", w=1200, h=900); p; dev.off()
 
 # all species same graph
 p <-
@@ -415,26 +422,25 @@ p <-
   theme(panel.spacing = unit(.1, "lines"),
         strip.text.x = element_text(size = 12, face = "bold"),
         strip.text.y = element_text(size = 12, face = "bold"),
-        axis.ticks.y = element_blank(),
         legend.position = "none")
 p
 p + scale_y_sqrt()
 
 CairoPNG("out/mean_counts_freey_sqrty.png", w=1200, h=900)
-  p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName, scales = "free_y")
-  dev.off()
+p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName, scales = "free_y")
+dev.off()
 
 CairoPNG("out/mean_counts_freey_plainy.png", w=1200, h=900)
-  p + facet_grid(Year ~ SpeciesName, scales = "free_y")
-  dev.off()
+p + facet_grid(Year ~ SpeciesName, scales = "free_y")
+dev.off()
 
 CairoPNG("out/mean_counts_samey_sqrty.png", w=1200, h=900)
-  p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName)
-  dev.off()
+p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName)
+dev.off()
 
 CairoPNG("out/mean_counts_samey_plainy.png", w=1200, h=900)
-  p + facet_grid(Year ~ SpeciesName)
-  dev.off()
+p + facet_grid(Year ~ SpeciesName)
+dev.off()
 
 
 # individual graphs for each species
