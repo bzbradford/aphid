@@ -1,4 +1,5 @@
 library(tidyverse)
+library(Cairo)
 
 # Read in data ------------------------------------------------------------
 
@@ -12,11 +13,6 @@ aphid_sites <- read.csv("data/aphid_sites.csv", header = T, na = '')
 
 # read species names
 aphid_spp <- read.csv("data/aphidsp.csv", header = TRUE, na = c('','.'))
-
-# read prism data
-prism <-
-  read.csv("data/prism.csv", header = TRUE) %>%
-  mutate(Date = as.Date(Date))
 
 
 
@@ -38,6 +34,7 @@ expandFn <- function(df) {
 }
 aphid_full <- expandFn(aphid_in)
 
+
 # Join GDD data with aphid data
 aphid_full <-
   aphid_full %>%
@@ -45,11 +42,17 @@ aphid_full <-
             by = c("SiteID", "Date")) %>%
   mutate(SiteID = as.factor(SiteID))
 
+
 # Join aphid names to dataset
 aphid_full <-
   aphid_full %>%
   left_join(aphid_spp, by = "SpeciesName") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
+
+
+# drop phylloxeridae
+aphid_full <- filter(aphid_full, Family != "Phylloxeridae")
+
 
 # Export file (optional)
 aphid_full %>%
@@ -178,18 +181,37 @@ aphid_full %>%
 # Species diversity from full aphid dataset -----------------------------
 
 f <- function(x) {length(unique(as.character(x)))} # returns number of unique factors
-aphid_full %>%
+aphid_summary <-
+  aphid_full %>%
   filter(Count > 0) %>%
   group_by(State) %>%
-  summarise(Sites = f(SiteID),
-            Years = f(Year),
-            Samples = f(SampleID),
-            Families = f(Family),
-            Genera = f(Genus),
-            Species = f(Species),
-            TotCt = sum(Count)
+  summarise(
+    Sites = f(SiteID),
+    Years = f(Year),
+    Samples = f(SampleID),
+    Families = f(Family),
+    Genera = f(Genus),
+    Species = f(Species),
+    TotCt = sum(Count)
   ) %>%
-  add_column(MeanCt = .$TotCt/.$Samples)
+  add_column(MeanCt = .$TotCt / .$Samples)
+aphid_summary %>% write.csv("out/STN_diversity_allspp.csv")
+
+# species diversity counts for whole dataset
+aphid_full %>%
+  filter(Count > 0) %>%
+  summarise(
+    States = f(State),
+    Sites = f(SiteID),
+    Years = f(Year),
+    Samples = f(SampleID),
+    Families = f(Family),
+    Genera = f(Genus),
+    Species = f(Species),
+    TotCt = sum(Count)
+  ) %>%
+  add_column(MeanCt = .$TotCt / .$Samples)
+
 
 # summarise by frequency
 aphid_full %>%
@@ -198,11 +220,18 @@ aphid_full %>%
   summarise(Freq = sum(isFound)/n()) %>%
   arrange(desc(Freq))
 
-# return number of observations
+# return number of observations by species name
 aphid %>%
   filter(Count > 0) %>%
   group_by(SpeciesName) %>%
-  summarise(Obs = n())
+  summarise(Obs = n(), Count = sum(Count))
+
+# number of observations by full taxonomy
+aphid_full %>%
+  filter(Count > 0) %>%
+  group_by(Family, Subfamily, Genus, Species, SpeciesName) %>%
+  summarise(Obs = n(), Count = sum(Count)) %>%
+  write.csv("out/spp_counts.csv")
 
 # weeks per year
 aphid_full %>%
@@ -283,20 +312,16 @@ p <-
   scale_y_sqrt() +
   labs(x = "",
        y = "Mean Count/Week",
-       title = paste("Aphid Suction Trap Network (",
-                     min(aphid$Year),
-                     "-",
-                     max(aphid$Year),
-                     "): Captures by Year and State",
-                     sep = '')) +
+       title = paste0("Aphid Suction Trap Network (",
+                      min(aphid$Year),"-",max(aphid$Year),
+                     "): Captures by Year and State")) +
   theme(
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
     legend.position = "none",
-    strip.text.x = element_text(size = 8),
-    strip.text.y = element_text(angle = 0)
+    strip.text.x = element_text(size = 12, face = "bold"),
+    strip.text.y = element_text(angle = 0, size = 12, face = "bold")
   )
 p
-ggsave(p, file="out/STN_CaptureByYearAndState.png", w = 8, h = 6)
+CairoPNG("out/STN_CaptureByYearAndState.png", w = 1200, h = 900); p; dev.off()
 
 
 # counts by GDD; facets by species
