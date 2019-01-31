@@ -5,6 +5,17 @@
 
 library(tidyverse)
 
+
+# Read existing saved prism data ------------------------------------------
+
+prism <-
+  read.csv("data/prism.csv", header = TRUE) %>%
+  mutate(Date = as.Date(Date))
+
+
+
+# Generate prism data from scratch ----------------------------------------
+
 files = choose.files() # pick prism output sheets
 
 # append all prism files into single data frame
@@ -29,7 +40,7 @@ fn.gdd <- function(tmin, tmax, lower = 50, upper = 86) {
 }
 
 # compute new columns
-prism_join <- prism_in %>%
+prism <- prism_in %>%
   mutate(Date = as.Date(Date),
          Year = format(Date, "%Y")) %>%
   group_by(SiteID, Year) %>%
@@ -38,12 +49,6 @@ prism_join <- prism_in %>%
          GDD50 = cumsum(fn.gdd(tminF, tmaxF, 50, 86))) %>%
   ungroup()
 
-
-prism <- rbind(prism, prism_join) # add new data to existing prism
-prism <- prism_join # OR don't join to existing prism, replace
-rm(prism_join)
-
-
 # fix column types
 prism$SiteID <- as.factor(prism$SiteID)
 prism$Year <- as.integer(prism$Year)
@@ -51,3 +56,12 @@ str(prism)
 
 # save prism data
 prism %>% write.csv("data/prism.csv")
+
+# had to remove underscores from SiteID field
+prism %>%
+  mutate(SiteID = gsub("_","",SiteID)) %>%
+  arrange(SiteID, Date) ->
+  prism
+
+
+
