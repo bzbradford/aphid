@@ -49,10 +49,11 @@ aphid_full <-
   left_join(aphid_spp, by = "SpeciesName") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
 
-
 # drop phylloxeridae
 aphid_full <- filter(aphid_full, Family != "Phylloxeridae")
 
+# add month
+aphid_full = aphid_full %>% mutate(Month = format(Date, format="%m-%b"))
 
 # Export file (optional)
 aphid_full %>%
@@ -557,15 +558,36 @@ aphid <- aphid_full %>%
 
 aphid <- mutate(aphid, Month = format.Date(Date, "%b"))
 
-emily_summary =
-  aphid %>%
+# mean glycines counts by site and year for Jul & Aug
+aphid %>%
   filter(Month %in% c("Jul", "Aug")) %>%
   group_by(Year, SiteID) %>%
   summarize(MeanCount = mean(Count)) %>%
   left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
-  mutate(SiteID = as.factor(SiteID))
+  mutate(SiteID = as.factor(SiteID)) %>%
+  write.csv("out/glycines-jul-aug.csv")
 
-emily_summary %>% write.csv("out/emily.csv")
+# mean glycines counts by site and year for Sep & Oct
+aphid %>%
+  filter(Month %in% c("Sep", "Oct")) %>%
+  group_by(Year, SiteID) %>%
+  summarize(MeanCount = mean(Count)) %>%
+  left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
+  mutate(SiteID = as.factor(SiteID)) %>%
+  write.csv("out/glycines-sep-oct.csv")
+
+# mean glycines counts by site and year for Jul thru Oct
+aphid %>%
+  filter(Month %in% c("Jul", "Aug", "Sep", "Oct")) %>%
+  group_by(Year, SiteID) %>%
+  summarize(MeanCount = mean(Count)) %>%
+  left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
+  mutate(SiteID = as.factor(SiteID)) %>%
+  write.csv("out/glycines-jul-oct.csv")
+
+
+
+
 
 #make a map
 library(ggmap)
