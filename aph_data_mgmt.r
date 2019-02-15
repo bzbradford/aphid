@@ -1,26 +1,33 @@
+# Load packages ----
+
 library(tidyverse)
 library(Cairo)
 
-# Read in data ------------------------------------------------------------
+
+
+# Read in data ----
 
 # read aphid counts (including dummy counts)
-aphid_in <-
+aphid_in =
   read.csv(file.choose(), header = TRUE, na = c('','.')) %>%
   mutate(Date = as.Date(Date))
+aphid_in = filter(aphid_in, SpeciesName != 'Phylloxeridae')
+
 
 # site info
-aphid_sites <- read.csv("data/aphid_sites.csv", header = T, na = '')
+aphid_sites = read.csv("data/aphid_sites.csv", header = T, na = '')
+
 
 # read species names
-aphid_spp <- read.csv("data/aphidsp.csv", header = TRUE, na = c('','.'))
+aphid_spp = read.csv(file.choose(), header = TRUE, na = c('','.'))
 
 
 
-# Data preparation ---------------------------------------------------------
+# Expand dataset ----
 
-# Expand dataset with zeros, drop dummy variable #
-expandFn <- function(df) {
-  cols <- ncol(df)
+# Expand dataset with zeros, drop dummy variable
+expandFn = function(df) {
+  cols = ncol(df)
   df %>%
     spread(SpeciesName,
            Count,
@@ -32,28 +39,41 @@ expandFn <- function(df) {
     filter(SpeciesName != "_dummy_") %>%
     droplevels()
 }
-aphid_full <- expandFn(aphid_in)
+aphid_full = expandFn(aphid_in)
 
 
-# Join GDD data with aphid data
-aphid_full <-
+
+# Joining datasets ----
+
+# Join aphid taxonomy
+aphid_full =
+  aphid_full %>%
+  left_join(aphid_spp,
+            by = "SpeciesName") %>%
+  mutate(SpeciesName = as.factor(SpeciesName))
+
+
+# Join GDD data
+aphid_full =
   aphid_full %>%
   left_join(prism[, c("SiteID", "Date", "GDD39", "GDD50")],
             by = c("SiteID", "Date")) %>%
   mutate(SiteID = as.factor(SiteID))
 
 
-# Join aphid names to dataset
-aphid_full <-
+# Join site locations
+aphid_full =
   aphid_full %>%
-  left_join(aphid_spp, by = "SpeciesName") %>%
-  mutate(SpeciesName = as.factor(SpeciesName))
+  left_join(aphid_sites[, c('SiteID', 'Lat', 'Lon')],
+            by = 'SiteID') %>%
+  mutate(SiteID = as.factor(SiteID))
 
-# drop phylloxeridae
-aphid_full <- filter(aphid_full, Family != "Phylloxeridae")
 
 # add month
-aphid_full = aphid_full %>% mutate(Month = format(Date, format="%m-%b"))
+aphid_full =
+  aphid_full %>%
+  mutate(Month = format(Date, format="%m-%b"))
+
 
 # Export file (optional)
 aphid_full %>%
@@ -62,10 +82,10 @@ aphid_full %>%
 
 
 
-# Aphid data subset options -------------------------------------
+# Data subset ----
 
 # Species list from Frost code
-aphid <-
+aphid =
   aphid_full %>%
   filter(
     SpeciesName %in% c(
@@ -86,7 +106,7 @@ aphid <-
 
 
 # Just four species
-aphid <-
+aphid =
   aphid_full %>%
   filter(
     SpeciesName %in% c(
@@ -100,8 +120,8 @@ aphid <-
 
 
 # Select by top n species
-topSpFn <- function(df, n) {
-  top <-
+topSpFn = function(df, n) {
+  top =
     df %>%
     group_by(SpeciesName) %>%
     summarise(totcount = sum(Count)) %>%
@@ -113,20 +133,20 @@ topSpFn <- function(df, n) {
 }
 
 # Select top spp by count in entire dataset
-aphid <- topSpFn(aphid_full, 10)
+aphid = topSpFn(aphid_full, 10)
 
 # Select top spp in wisconsin
-aphid <- aphid_full %>%
+aphid = aphid_full %>%
   filter(State == "WI") %>%
   topSpFn(10)
 
 # Filter Wisconsin only
-aphid <- aphid %>% 
+aphid = aphid %>% 
   filter(State == "WI")
 
 
 
-# Numerical summaries of subset ------------------------------------------------
+# Numerical summaries ----
 
 # summarise by total count
 aphid %>%
@@ -137,24 +157,23 @@ aphid %>%
 
 
 # generate annual count summaries and a total count by species, then save
-totCt <-
-  left_join({
-    aphid %>%
-      select(SpeciesName, Year, Count) %>%
-      group_by(SpeciesName, Year) %>%
-      summarise(TotalCount = sum(Count)) %>%
-      ungroup(Year) %>%
-      spread(Year, TotalCount)
-  },
-  {
-    aphid %>%
-      group_by(SpeciesName) %>%
-      summarise(TotalCount = sum(Count))
-  })
-totCt %>% write.csv("out/totalCount.csv")
+left_join({
+  aphid %>%
+    select(SpeciesName, Year, Count) %>%
+    group_by(SpeciesName, Year) %>%
+    summarise(TotalCount = sum(Count)) %>%
+    ungroup(Year) %>%
+    spread(Year, TotalCount)
+},
+{
+  aphid %>%
+    group_by(SpeciesName) %>%
+    summarise(TotalCount = sum(Count))
+}) %>%
+  write.csv("out/totalCount.csv")
 
 
-# generate weekly mean counts
+# generate weekly mean counts for wi
 aphid %>%
   filter(State == "WI") %>%
   select(SpeciesName, Week, Count) %>%
@@ -179,10 +198,10 @@ aphid_full %>%
 
 
 
-# Species diversity from full aphid dataset -----------------------------
+# Species diversity ----
 
-f <- function(x) {length(unique(as.character(x)))} # returns number of unique factors
-aphid_summary <-
+f = function(x) {length(unique(as.character(x)))} # returns number of unique factors
+aphid_summary =
   aphid_full %>%
   filter(Count > 0) %>%
   group_by(State) %>%
@@ -197,6 +216,7 @@ aphid_summary <-
   ) %>%
   add_column(MeanCt = .$TotCt / .$Samples)
 aphid_summary %>% write.csv("out/STN_diversity_allspp.csv")
+
 
 # species diversity counts for whole dataset
 aphid_full %>%
@@ -221,11 +241,13 @@ aphid_full %>%
   summarise(Freq = sum(isFound)/n()) %>%
   arrange(desc(Freq))
 
+
 # return number of observations by species name
 aphid %>%
   filter(Count > 0) %>%
   group_by(SpeciesName) %>%
   summarise(Obs = n(), Count = sum(Count))
+
 
 # number of observations by full taxonomy
 aphid_full %>%
@@ -233,6 +255,7 @@ aphid_full %>%
   group_by(Family, Subfamily, Genus, Species, SpeciesName) %>%
   summarise(Obs = n(), Count = sum(Count)) %>%
   write.csv("out/spp_counts.csv")
+
 
 # weeks per year
 aphid_full %>%
@@ -242,10 +265,8 @@ aphid_full %>%
 
 
 
-# Summary plots -------------------------------------------
-
-### group by state ###
-pltByState <-
+# Plot counts by state ----
+pltByState =
   aphid %>%
   group_by(State, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -276,8 +297,8 @@ pltByState
 pdf("out/STN_CountsByState.pdf", h = 8.5, w = 11); pltByState; dev.off()
 
 
-### Counts by year ###
-pltByYear <-
+# Plot counts by year ----
+pltByYear =
   aphid %>% filter(State == "WI") %>%
   group_by(Year, SpeciesName) %>%
   summarise(totcount = sum(Count)) %>%
@@ -301,8 +322,8 @@ pltByYear
 pdf("out/STN_CountsByYear.pdf", h = 8.5, w = 11); pltByYear; dev.off()
 
 
-### Counts by state and year ###
-p <- 
+# Plot counts by state and year ----
+p = 
   aphid %>%
   group_by(State, Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
@@ -325,8 +346,8 @@ p
 CairoPNG("out/STN_CaptureByYearAndState.png", w = 1200, h = 900); p; dev.off()
 
 
-# counts by GDD; facets by species
-p <- aphid %>%
+# Plot counts by GDD; facets by species ----
+p = aphid %>%
   ggplot(aes(
     x = GDD,
     y = log10(Count + 1),
@@ -352,8 +373,8 @@ p
 pdf("multiyear NCR aphid phenology by GDD.pdf", h = 8.5, w = 11); p; dev.off()
 
 
-# multi-year comparison of counts by week
-p <- aphid %>%
+# Plot multi-year comparison of counts by week ----
+p = aphid %>%
   ggplot(aes(x = Week, y = log10(Count + 1), color = as.factor(Year))) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   stat_smooth(method = "gam", formula = y ~ s(x), fill = NA, size = .5) +
@@ -366,7 +387,7 @@ p
 pdf("multiyear NCR aphid phenology by Week.pdf", h = 8.5, w = 11); p; dev.off()
 
 
-p <- aphid %>%
+p = aphid %>%
   ggplot(aes(x = as.factor(Year), y = log10(Count + 1), group = Year, color = as.factor(Year))) +
   geom_boxplot() +
   facet_grid(SpeciesName ~ .) +
@@ -374,7 +395,7 @@ p <- aphid %>%
   geom_smooth( method = "gam", formula = y ~ s(x) + 1, fill = "grey50", size = 1)
 p
 
-p <- subset(aphid, Year == 2016) %>%
+p = subset(aphid, Year == 2016) %>%
   ggplot(aes(x = Julian, y = log10(Count + 1))) +
   facet_grid(SpeciesName ~ .) +
   geom_ribbon(aes(ymin = 0, ymax = 2))
@@ -382,13 +403,10 @@ p
 
 
 
-# Russ charts Jan 2019 ---------------------------------------------------------
-
-library(tidyverse)
-library(Cairo)
+# Russ charts Jan 2019 ----
 
 # Top 5 wis aphids
-russ_aphids <- c(
+russ_aphids = c(
   "Aphis glycines",
   "Acyrthosiphon pisum",
   "Rhopalosiphum padi",
@@ -397,26 +415,14 @@ russ_aphids <- c(
   )
 
 #generate dataset
-aphid <-
+aphid =
   aphid_full %>%
   filter(SpeciesName %in% russ_aphids) %>%
   droplevels()
 
-# aphid %>%
-#   group_by(Year, Week, SpeciesName) %>%
-#   summarize(TotCount = sum(Count)) %>%
-#   ggplot(aes(x = Week, y = TotCount)) +
-#   geom_area(aes(fill = SpeciesName)) +
-#   facet_grid(Year ~ SpeciesName) +
-#   scale_y_log10() +
-#   labs(x = "Week of Year",
-#        y = "Log abundance") +
-#   theme(panel.spacing = unit(.1, "lines"),
-#         axis.text.y = element_blank(),
-#         legend.position = "none")
 
 # all species same graph
-p <-
+p =
   aphid %>%
   group_by(Year, Week, SpeciesName) %>%
   summarize(TotCount = log(sum(Count)+1)) %>%
@@ -435,8 +441,9 @@ p <-
 p
 CairoPNG("out/russ aphids same graph.png", w=1200, h=900); p; dev.off()
 
+
 # all species same graph
-p <-
+p =
   aphid %>%
   group_by(Year, Week, SpeciesName) %>%
   summarize(TotCount = mean(Count)) %>%
@@ -472,7 +479,7 @@ dev.off()
 # individual graphs for each species
 for (s in russ_aphids) {
   print(s)
-  p <-
+  p =
   aphid %>%
     filter(SpeciesName == s) %>%
     group_by(Year, Week, SpeciesName) %>%
@@ -494,69 +501,14 @@ for (s in russ_aphids) {
 }
 
 
-#testbed
 
-aphid %>%
-  group_by(Year, Week, SpeciesName) %>%
-  summarize(TotCount = log(sum(Count)+1))
+# IDW export for Emily ----
 
-
-aphid %>%
-  group_by(Year, Week, SpeciesName) %>%
-  summarize(TotCount = mean(Count)) %>%
-  filter(TotCount > 0) %>%
-  droplevels() %>%
-  ggplot(aes(x = as.Date("2017-01-01") + (Week - 1) * 7,
-             y = TotCount,
-             color = SpeciesName,
-             fill = SpeciesName)) +
-  geom_area() +
-  facet_grid(Year ~ ., scales = "free_x") +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Week of Year",
-       y = "Log abundance") +
-  theme(
-    panel.spacing = unit(.1, "lines"),
-    strip.text.x = element_text(size = 12, face = "bold"),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank()
-  )
-
-png("out/test.png",
-    w = 1200,
-    h = 900,
-    type = "cairo")
-aphid %>%
-  group_by(Year, Week, SpeciesName) %>%
-  summarize(TotCount = mean(Count)) %>%
-  ggplot(aes(
-    x = Week,
-    y = TotCount,
-    color = SpeciesName,
-    fill = SpeciesName
-  )) +
-  geom_area() +
-  scale_y_sqrt() +
-  facet_grid(Year ~ .) +
-  labs(x = "Date",
-       y = "Count") +
-  theme(
-    panel.spacing = unit(.1, "lines"),
-    strip.text.x = element_text(size = 12, face = "bold"),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank()
-  )
-dev.off()
-
-
-
-# emily averages ----------------------------------------------------------
-
-aphid <- aphid_full %>%
+aphid = aphid_full %>%
   filter(SpeciesName == "Aphis glycines") %>%
   droplevels()
 
-aphid <- mutate(aphid, Month = format.Date(Date, "%b"))
+aphid = mutate(aphid, Month = format.Date(Date, "%b"))
 
 # mean glycines counts by site and year for Jul & Aug
 aphid %>%
@@ -587,19 +539,7 @@ aphid %>%
 
 
 
-
-
-#make a map
-library(ggmap)
-p <-
-  emily_summary %>%
-  filter(Year == 2010) %>%
-  qmplot(data = .,
-         Lon,
-         Lat,
-         maptype = "toner-lite",
-         color = I("red"))
-
-p
-
-
+# Export glycines ----
+aphid_full %>%
+  filter(SpeciesName == 'Aphis glycines') %>%
+  write.csv("out/glycines.csv")
