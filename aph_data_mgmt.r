@@ -5,7 +5,7 @@ library(Cairo)
 
 
 
-# Read in data ----
+# Read in suction data ----
 
 # read aphid counts (including dummy counts)
 aphid_in =
@@ -20,7 +20,6 @@ aphid_sites = read.csv("data/aphid_sites.csv", header = T, na = '')
 
 # read species names
 aphid_spp = read.csv(file.choose(), header = TRUE, na = c('','.'))
-
 
 
 # Expand dataset ----
@@ -41,6 +40,17 @@ expandFn = function(df) {
 }
 aphid_full = expandFn(aphid_in)
 
+
+
+# SCRI data
+SCRI_ID = read.csv(file.choose(), header = TRUE, na = c('', '.')) %>%
+  mutate(Date = as.Date(Date))
+SCRI_ID_full = 
+  expandFn(SCRI_ID) %>%
+  left_join(aphid_spp,
+            by = "SpeciesName") %>%
+  mutate(SpeciesName = as.factor(SpeciesName))
+SCRI_ID_full %>% write.csv("out/scri_id_aphids.csv")
 
 
 # Joining datasets ----
@@ -72,7 +82,7 @@ aphid_full =
 # add month
 aphid_full =
   aphid_full %>%
-  mutate(Month = format(Date, format="%m-%b"))
+  mutate(Month = as.numeric(format.Date(Date, format = "%m")))
 
 
 # Export file (optional)
@@ -502,44 +512,43 @@ for (s in russ_aphids) {
 
 
 
-# IDW export for Emily ----
+# glycines IDW export for Emily ----
 
-aphid = aphid_full %>%
+
+# filter
+glycines = aphid_full %>%
   filter(SpeciesName == "Aphis glycines") %>%
+  mutate(MonthName = as.factor(format.Date(Date, "%b"))) %>%
   droplevels()
 
-aphid = mutate(aphid, Month = format.Date(Date, "%b"))
+
+# export
+glycines %>% write.csv('out/glycines.csv')
+
 
 # mean glycines counts by site and year for Jul & Aug
-aphid %>%
-  filter(Month %in% c("Jul", "Aug")) %>%
+glycines_jul_aug =
+  glycines %>%
+  filter(Month %in% c(7, 8)) %>%
   group_by(Year, SiteID) %>%
-  summarize(MeanCount = mean(Count)) %>%
-  left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
-  mutate(SiteID = as.factor(SiteID)) %>%
-  write.csv("out/glycines-jul-aug.csv")
+  summarize(MeanCount = mean(Count))
+glycines_jul_aug %>% write.csv("out/glycines-jul-aug.csv")
+
 
 # mean glycines counts by site and year for Sep & Oct
-aphid %>%
-  filter(Month %in% c("Sep", "Oct")) %>%
+glycines_sep_oct =
+  glycines %>%
+  filter(Month %in% c(9, 10)) %>%
   group_by(Year, SiteID) %>%
-  summarize(MeanCount = mean(Count)) %>%
-  left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
-  mutate(SiteID = as.factor(SiteID)) %>%
-  write.csv("out/glycines-sep-oct.csv")
+  summarize(MeanCount = mean(Count))
+glycines_sep_oct %>% write.csv("out/glycines-sep-oct.csv")
+
 
 # mean glycines counts by site and year for Jul thru Oct
-aphid %>%
-  filter(Month %in% c("Jul", "Aug", "Sep", "Oct")) %>%
+glycines_jul_oct =
+  glycines %>%
+  filter(Month %in% c(7, 8, 9, 10)) %>%
   group_by(Year, SiteID) %>%
-  summarize(MeanCount = mean(Count)) %>%
-  left_join(aphid_sites[, c("SiteID","Lat","Lon")], by = "SiteID") %>%
-  mutate(SiteID = as.factor(SiteID)) %>%
-  write.csv("out/glycines-jul-oct.csv")
-
-
-
-# Export glycines ----
-aphid_full %>%
-  filter(SpeciesName == 'Aphis glycines') %>%
-  write.csv("out/glycines.csv")
+  summarize(MeanCount = mean(Count), Lon = min(Lon), Lat = min(Lat)) %>%
+  ungroup()
+glycines_jul_oct %>% write.csv("out/glycines-jul-oct.csv")
