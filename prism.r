@@ -6,17 +6,18 @@
 library(tidyverse)
 
 
-# Read existing saved prism data ------------------------------------------
+# Read existing saved prism data ----
 
-prism <-
+prism =
   read.csv("data/prism.csv", header = TRUE) %>%
   mutate(Date = as.Date(Date))
 
 
 
-# Generate prism data from scratch ----------------------------------------
+# OR Generate prism data from scratch ----
 
-files = choose.files() # pick prism output sheets
+# pick prism output sheets
+files = choose.files()
 
 # append all prism files into single data frame
 for (i in 1:length(files)){
@@ -25,43 +26,42 @@ for (i in 1:length(files)){
 }
 
 # assign column names
-names(prism_in) <- c("SiteID",
-                     "Longitude",
-                     "Latitude",
-                     "ElevFt",
-                     "Date",
-                     "pptIn",
-                     "tminF",
-                     "tmaxF")
+names(prism_in) =
+  c("SiteID",
+    "Longitude",
+    "Latitude",
+    "ElevFt",
+    "Date",
+    "pptIn",
+    "tminF",
+    "tmaxF")
 
 # define GDD function
-fn.gdd <- function(tmin, tmax, lower = 50, upper = 86) {
-  pmax(0, (pmax(tmin, lower) + pmin(tmax, upper)) / 2 - lower)
-}
+fn.gdd =
+  function(tmin, tmax, lower = 50, upper = 86) {
+    pmax(0, (pmax(tmin, lower) + pmin(tmax, upper)) / 2 - lower)
+  }
 
 # compute new columns
-prism <- prism_in %>%
+prism =
+  prism_in %>%
   mutate(Date = as.Date(Date),
          Year = format(Date, "%Y")) %>%
   group_by(SiteID, Year) %>%
   arrange(SiteID, Date) %>%
   mutate(GDD39 = cumsum(fn.gdd(tminF, tmaxF, 39, 86)),
          GDD50 = cumsum(fn.gdd(tminF, tmaxF, 50, 86))) %>%
-  ungroup()
-
-# fix column types
-prism$SiteID <- as.factor(prism$SiteID)
-prism$Year <- as.integer(prism$Year)
-str(prism)
+  ungroup() %>%
+  mutate(SiteID = as.factor(SiteID),
+         Year = as.integer(Year))
 
 # save prism data
 prism %>% write.csv("data/prism.csv")
 
+
 # had to remove underscores from SiteID field
-prism %>%
-  mutate(SiteID = gsub("_","",SiteID)) %>%
-  arrange(SiteID, Date) ->
-  prism
-
-
+# prism %>%
+#   mutate(SiteID = gsub("_","",SiteID)) %>%
+#   arrange(SiteID, Date) ->
+#   prism
 
