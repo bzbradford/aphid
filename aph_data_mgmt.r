@@ -22,6 +22,7 @@ aphid_sites = read.csv("data/aphid_sites.csv", header = T, na = '')
 aphid_spp = read.csv(file.choose(), header = TRUE, na = c('','.'))
 
 
+
 # Expand dataset ----
 
 # Expand dataset with zeros, drop dummy variable
@@ -42,7 +43,7 @@ aphid_full = expandFn(aphid_in)
 
 
 
-# SCRI data
+# SCRI data ----
 SCRI_ID = read.csv(file.choose(), header = TRUE, na = c('', '.')) %>%
   mutate(Date = as.Date(Date))
 SCRI_ID_full = 
