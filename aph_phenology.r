@@ -1,12 +1,14 @@
-###
-### Conditional mode plots of aphid phenology
-###
+### Conditional mode plots of aphid phenology ###
+
+# Load packages ----
 
 library(lme4)
 library(mgcv)
 library(tidyverse)
 
-# CM: Year + Week + Loc ----------------------------------------------
+
+
+# CM: Year + Week + Loc ----
 
 # create variables
 aphid$Location <- aphid$SiteID
@@ -78,7 +80,7 @@ YWLgam
 
 
 
-# CM: Week + Loc (single year) ---------------------------------------------
+# CM: Week + Loc (single year) ----
 
 # define function
 remWL <- function(df) {
@@ -136,7 +138,7 @@ WLgam
 
 
 
-# CM by GDD ---------------------------------------------------------------
+# CM by GDD ----
 
 ### define functions ###
 remfn <- function(df) {
@@ -175,41 +177,35 @@ gamptfn <- function(df){
 
 ### TEST OPTIMIZATION ###
 #devtools::install_github("hadley/multidplyr")
-require(multidplyr)
-CMGDD_test <-
-  aphid2 %>%
-  partition(SpeciesName) %>%
-  do({
-    require(lme4)
-    fmod = ranef(glmer(
-      Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
-      data = .,
-      family = "poisson"
-    ))
-    data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
-               CM = fmod$GDD39[, 1])
-  }) %>%
-  collect()
-
+# require(multidplyr)
+# CMGDD_test <-
+#   aphid2 %>%
+#   partition(SpeciesName) %>%
+#   do({
+#     require(lme4)
+#     fmod = ranef(glmer(
+#       Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+#       data = .,
+#       family = "poisson"
+#     ))
+#     data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
+#                CM = fmod$GDD39[, 1])
+#   }) %>%
+#   collect()
 
 # generate CMs from GDD
-cm_gdd <-
-  aphid %>%
-  group_by(SpeciesName) %>%
-  do(remfn(.))
+cm_gdd = aphid %>% group_by(SpeciesName) %>% do(remfn(.))
 
 # generate predictions from gam fit
-gampreds <-
-  cm_gdd %>%
-  do(gampredfn(.))
+gampreds = cm_gdd %>% do(gampredfn(.))
 
 # identify critical points
-gampts <-
-  gampreds %>%
-  do(gamptfn(.))
+gampts = gampreds %>% do(gamptfn(.))
 
-# plot phenology curves
-p <- cm_gdd %>%
+
+# Plot phenology curves ----
+p =
+  cm_gdd %>%
   ggplot(aes(x = GDD, y = CM)) +
   facet_wrap( ~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
