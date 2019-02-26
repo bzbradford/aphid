@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(Cairo)
+library(stats)
 
 
 
@@ -84,6 +85,15 @@ aphid_full =
 aphid_full =
   aphid_full %>%
   mutate(Month = as.numeric(format.Date(Date, format = "%m")))
+
+
+# add full state name
+aphid_full =
+  left_join(aphid_full,
+            data.frame(State = state.abb,
+                       StateName = state.name)) %>%
+  mutate(State = as.factor(State),
+         StateName = as.factor(StateName))
 
 
 # Export file (optional)
@@ -553,3 +563,53 @@ glycines_jul_oct =
   summarize(MeanCount = mean(Count), Lon = min(Lon), Lat = min(Lat)) %>%
   ungroup()
 glycines_jul_oct %>% write.csv("out/glycines-jul-oct.csv")
+
+
+# Aphis glycines counts by state ----
+
+aphid_full %>%
+  filter(SpeciesName == "Aphis glycines") %>%
+  group_by(State, Year) %>%
+  summarise(Count = mean(Count) + 1) %>%
+  arrange(desc(Count)) %>%
+  ggplot(aes(x = Year, y = Count)) +
+  geom_hline(yintercept = 1) +
+  facet_grid(State ~ .) +
+  geom_bar(stat = "identity", aes(fill = State)) +
+  scale_y_log10() +
+  labs(x = "",
+       y = "Mean count per week") +
+  theme_gray() +
+  theme(
+    legend.position = "none",
+    strip.text.x = element_text(size = 12, face = "bold"),
+    strip.text.y = element_text(angle = 0, size = 12, face = "bold")
+  )
+
+p =
+  aphid_full %>%
+  filter(SpeciesName == "Aphis glycines") %>%
+  mutate(Year = as.Date(paste0(Year, "-01-01"))) %>%
+  group_by(StateName, Year) %>%
+  summarise(mean = mean(Count) + 1,
+            sd = sd(Count)) %>%
+  arrange(desc(StateName)) %>%
+  ggplot(aes(x = Year, y = mean, fill = StateName)) +
+  geom_hline(yintercept = 1) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_errorbar(aes(ymin = mean,
+                    ymax = mean + sd)) +
+  scale_y_log10() +
+  facet_wrap(~ StateName, nrow = 2) +
+  labs(x = "",
+       y = "Mean soybean aphid captures per week") +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    strip.text.x = element_text(size = 12, face = "bold"),
+    strip.text.y = element_text(angle = 0, size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+p
+CairoPNG("out/glycines captures.png", w = 1200, h = 600); p; dev.off()
+png("out/glycines captures.png", w = 10, h = 5, res = 300, units = "in");p;dev.off()
