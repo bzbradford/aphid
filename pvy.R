@@ -179,9 +179,9 @@ pvy_gampreds =
   pvy_cm %>%
   group_by(State) %>%
   do(
-  cbind(data.frame(GDD = 1:7500),
+  cbind(data.frame(GDD = 0:as.integer(max(.$GDD))),
         CM = predict.gam(gam(CM ~ s(GDD), data = .),
-                         data.frame(GDD = 1:7500)))
+                         data.frame(GDD = 0:as.integer(max(.$GDD)))))
   )
 
 # inflection points and intercepts
@@ -200,14 +200,20 @@ pvy_gampts =
 
 
 # graph
-pvy_gampreds %>%
+p =
+  pvy_gampreds %>%
   group_by(State) %>%
   ggplot(aes(x = GDD, y = CM)) +
+  scale_y_continuous(limits = c(-2, 2)) +
   geom_hline(yintercept = 0) +
   geom_line(color = "red", size = 1) +
-  facet_wrap(~State) +
-  geom_point(data = pvy_gampts, aes(x = GDD, y = CM))
-
+  facet_wrap(~ State, scales = "free_x") +
+  geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
+  geom_vline(data = pvy_gampts, aes(xintercept = GDD)) +
+  labs(title = "PVY Risk estimates by degree day (39/86)") +
+  theme(strip.text = element_text(face = "bold"))
+p
+CairoPNG("out/pvy risk by state.png", h = 800, w = 1200); p; dev.off()
 
 
 # # Subset into groups ------------------------------------------------------
