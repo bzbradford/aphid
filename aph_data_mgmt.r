@@ -23,6 +23,9 @@ aphid_sites = read.csv("data/aphid_sites.csv", header = T, na = '')
 aphid_spp = read.csv(file.choose(), header = TRUE, na = c('','.'))
 
 
+# scri aphids
+orwameid = read.csv(file.choose(), header = TRUE)
+
 
 # Expand dataset ----
 
@@ -586,9 +589,13 @@ aphid_full %>%
     strip.text.y = element_text(angle = 0, size = 12, face = "bold")
   )
 
+sp = "Aphis glycines"
+sp = "Rhopalosiphum maidis"
+sp = "Sitobion avenae"
+sp = "Schizaphis graminum"
 p =
   aphid_full %>%
-  filter(SpeciesName == "Aphis glycines") %>%
+  filter(SpeciesName == sp) %>% # edit species name here
   mutate(Year = as.Date(paste0(Year, "-01-01"))) %>%
   group_by(StateName, Year) %>%
   summarise(mean = mean(Count) + 1,
@@ -600,16 +607,15 @@ p =
   geom_errorbar(aes(ymin = mean,
                     ymax = mean + sd)) +
   scale_y_log10() +
-  facet_wrap(~ StateName, nrow = 2) +
-  labs(x = "",
-       y = "Mean soybean aphid captures per week") +
+  facet_wrap( ~ StateName, nrow = 2) +
+  labs(title = bquote(bold(bolditalic(.(sp)) ~ "captures, 2005-2018")),
+       x = "",
+       y = bquote(bold("Mean captures per trap per week"))) +
   theme_bw() +
   theme(
     legend.position = "none",
     strip.text.x = element_text(size = 12, face = "bold"),
-    strip.text.y = element_text(angle = 0, size = 12, face = "bold"),
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 p
-CairoPNG("out/glycines captures.png", w = 1200, h = 600); p; dev.off()
-png("out/glycines captures.png", w = 10, h = 5, res = 300, units = "in");p;dev.off()
+CairoPNG("out/maidis captures.png", w=12, h=5, u="in", dpi=300); p; dev.off()
