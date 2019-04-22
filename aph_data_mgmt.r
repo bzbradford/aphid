@@ -591,6 +591,7 @@ aphid_full %>%
 
 sp = "Aphis glycines"
 sp = "Rhopalosiphum maidis"
+sp = "Rhopalosiphum padi"
 sp = "Sitobion avenae"
 sp = "Schizaphis graminum"
 p =
@@ -618,4 +619,4 @@ p =
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 p
-CairoPNG("out/maidis captures.png", w=12, h=5, u="in", dpi=300); p; dev.off()
+CairoPNG("out/padi captures.png", w=12, h=5, u="in", dpi=300); p; dev.off()

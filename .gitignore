@@ -4,8 +4,3 @@
 .RData
 .Ruserdata
 ~archive
-data
-out
-*.pdf
-*.png
-*.csv
