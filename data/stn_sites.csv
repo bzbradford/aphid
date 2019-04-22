@@ -1,0 +1,51 @@
+﻿SiteID,State,StateName,SiteName,SiteCode,Lat,Lon,Confirmed,Name of trap location,Collector,Inception
+IAAME,IA,Iowa,Ames,AME,42.017973,-93.777653,Y,Iowa State University (ISU) Bio Century Farm near Ames,E. Hodgson,2005
+IAKAN,IA,Iowa,Kanawha,KAN,42.93082778,-93.79509444,Y,Iowa State University (ISU) Northern Research Farm,M. Schnabel,2016
+IAMCN,IA,Iowa,McNay,MCN,40.972683,-93.423704,Y,ISU McNay Research and Demonstration Farm,N. Piekema,2005
+IANAS,IA,Iowa,Nashua,NAS,42.93146667,-92.57433333,Y,ISU NE Research and Demonstration Farm,K. Penckiosky,2005
+IASUT,IA,Iowa,Sutherland,SUT,42.92618266,-95.53896236,Y,ISU NW Research and Demonstration Farm,"D. Haden, J. Sievers",2005
+ILBRO,IL,Illinois,Brownstown,BRO,38.953522,-88.958316,Y,Brownstown Agronomy Research Center,Lindell Deal,2005
+ILDEK,IL,Illinois,DeKalb,DEK,41.841905,-88.8569,Y,Northern Illinois Agronomy Research Center,"D. Lindgren, L. Paul",2005
+ILDIX,IL,Illinois,DixonSprings,DIX,37.435205,-88.671443,Y,Dixon Springs Agricultural Center,S. Ebelhar,2005
+ILFRE,IL,Illinois,Freeport,FRE,42.28,-89.7,N,Keith Hinrichs Farm,K. Hinrichs,2005
+ILJOL,IL,Illinois,Joliet,JOL,41.5,-88.1,N,"Farm Management and Operation, Joliet Junior College",J. Wessel,
+ILMET,IL,Illinois,Metamora,MET,40.8,-89.41,N,FS North Metamora,K. Carrithers,2005
+ILMON,IL,Illinois,Monmouth,MON,40.93358611,-90.723225,Y,Northwestern Illinois Agriculture Research and Demonstration Center,M. Johnson,2005
+ILMOR,IL,Illinois,Morris,MOR,41.33516667,-88.38363333,Y,Russ Higgins Farm,R. Higgins,2005
+ILORR,IL,Illinois,Orr,ORR,39.805624,-90.823858,Y,"Orr Agricultural Research and Demonstration Center, University of Illinois",Mike Vose,2005
+ILSOY,IL,Illinois,SoyFACE,SOY,40.0419,-88.2318,Y,"Research Facility SoyFACE, University of Illinois at Urbana-Champaign and USDA-ARS",Christopher Montes ,2006
+ILURB,IL,Illinois,Urbana,URB,40.0895,-88.228657,Y,Southfarms University of Illinois at U-C,D. Lagos-Kutz,2005
+INACR,IN,Indiana,ACRE,ACR,40.4704,-86.9939,Y,Agronomy Center for Research and Education,M. Rhainds,2005
+INDPA,IN,Indiana,DPAC,DPA,40.254487,-85.15039,Y,Davis Purdue Agriculture Center,J. Boyer,2005
+INNEP,IN,Indiana,NEPAC,NEP,41.105142,-85.399086,Y,"North East Purdue Agriculture Center, Purdue University",Phil Walker,2005
+INPIT,IN,Indiana,PIT,PIT,40.414042,-86.915776,Y,South Campus Purdue University West Lafayete,,2005
+INPPA,IN,Indiana,PPAC,PPA,41.443917,-86.930154,Y,Pinny Purdue Agriculture Center,J. Leuck,2005
+INSEP,IN,Indiana,SEPAC,SEP,39.035041,-85.529142,Y,"South East Purdue Agriculture Center, Purdue University",J. Wahlman,2005
+INTPA,IN,Indiana,TPAC,TPA,40.17217,-86.543489,Y,"Throckmorton Purdue Agriculture Center, Purdue University",P. Illingworth,2013
+KSMAN,KS,Kansas,Manhattan,MAN,39.208108,-96.594131,Y,"North Agronomy Farm, Kansas State University",B. McCornack,2006
+KYLEX,KY,Kentucky,Lexington,LEX,38.1275,-84.512,Y,Spindltop Research Farm,L. Minter,2007
+KYPRI,KY,Kentucky,Princeton,PRI,37.096279,-87.860647,Y,University of Kentucky Research and Education Center at Princeton,D. Johnson,2006
+MIBE1,MI,Michigan,BeanAndBeet1,BE1,43.37917778,-84.11188056,Y,Saginaw Valley Beet and Bean Research Farm,C. DiFonzo,2005
+MIBE2,MI,Michigan,BeanAndBeet2,BE2,43.39909722,-83.696375,Y,Saginaw Valley Beet and Bean Research Farm,C. DiFonzo,2009
+MIEAS,MI,Michigan,EastLansing,EAS,42.690984,-84.497592,Y,South Campus Field Research Facilities,C. Malstrom,2005
+MIKAL,MI,Michigan,Kalkaska,KAL,44.658837,-85.080015,Y,Ioot’s Private Potato Seeds Farm,D. Ioot,2016
+MIKEL,MI,Michigan,Kellogg,KEL,42.41021,-85.372859,Y,"W. K. Kellogg Biological Station, Michigan State University","Julia Perrone, Christie Bahlai",2005
+MIMON,MI,Michigan,Monroe,MON,41.9265,-83.46583,Y,"MSU Extension Center, 963 South Raisinville Road, Monroe, MI 48161",N. Birkey,2006
+MISAN,MI,Michigan,Sanilac,SAN,43.456114,-82.833958,Y,MSU Extension Center,M. Nagelkirk,2009
+MNALB,MN,Minnesota,AlbertLea,ALB,43.70523,-93.228012,Y,Private farm,D. Ragsdale,2005
+MNCRO,MN,Minnesota,Crookston,CRO,47.797802,-96.620903,Y,Northwest Research and Outreach Center,I. MacRae,2006
+MNLAM,MN,Minnesota,Lamberton,LAM,44.23971,-95.31528,Y,Southwest Research and Outreach Center,B. Potter,2005
+MNMOR,MN,Minnesota,Morris,MOR,45.590961,-95.868934,Y,West Central Research and Outreach Center,C. Reese,2005
+MNROS,MN,Minnesota,Rosemount,ROS,44.70551,-93.100614,Y,Rosemount Research and Outreach Center,J. Dregni,2005
+MOCOL,MO,Missouri,Columbia,COL,38.907309,-92.280504,Y,"Campus, University of Missouri",D. Finke,2006
+MOPOR,MO,Missouri,Portageville,POR,36.401995,-89.614924,Y,"Delta Research Center, University of Missouri",M. Jones,2007
+SDBRO,SD,South Dakota,Brookings,BRO,44.303521,-96.666094,Y,South Dakota State Campus Farm,K. Tilmon,2006
+SDVOL,SD,South Dakota,Volga,VOL,44.302557,-96.926401,Y,,,2013
+WIANT,WI,Wisconsin,Antigo,ANT,45.177705,-89.208928,Y,Andy Merry private Farm,"A. Merry, K. Gallenberg (from 2017-present)",2006
+WIARL,WI,Wisconsin,Arlington,ARL,43.317376,-89.327943,Y,Arlington Agriculture Research Station,,2005
+WIEAU,WI,Wisconsin,EauClaire,EAU,44.754346,-91.588636,Y,Pioneer Hi-Bred International ,,2005
+WIHAN,WI,Wisconsin,Hancock,HAN,44.118384,-89.53372,Y,Hancock Agriculture Research Station,,2005
+WILAN,WI,Wisconsin,Lancaster,LAN,42.83077,-90.788737,Y,Lancaster Agriculture Research Station,,2005
+WIRHI,WI,Wisconsin,Rhinelander,RHI,45.662514,-89.269447,Y,Rhinelander Agriculture Research Station,,2012
+WISEY,WI,Wisconsin,Seymour,SEY,44.553127,-88.309338,Y,Dennis Lawkowski Farm,D. Lawkowski,2006
+WIWAL,WI,Wisconsin,Walworth,WAL,42.529596,-88.696929,Y,Private farm,P. Reedy,2005

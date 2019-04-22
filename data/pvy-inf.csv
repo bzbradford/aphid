@@ -1,0 +1,12 @@
+﻿SpeciesName,InfLow,InfUp,InfAvg
+Acyrthosiphon pisum,0.07,0.14,0.105
+Aphis craccivora,0.04,0.04,0.04
+Aphis glycines,0.14,0.75,0.445
+Brachycaudus helichrysi,0.009,0.125,0.067
+Brevicoryne brassicae,0.03,0.03,0.03
+Capitophorus elaeagni,0.02,0.02,0.02
+Macrosiphum euphorbiae,0.27,0.29,0.28
+Myzus persicae,0.084,0.83,0.457
+Rhopalosiphum maidis,0.02,0.02,0.02
+Rhopalosiphum padi,0.02,0.115,0.068
+Sitobion avenae,0.001,0.018,0.01
