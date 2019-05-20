@@ -620,3 +620,20 @@ p =
   )
 p
 CairoPNG("out/padi captures.png", w=12, h=5, u="in", dpi=300); p; dev.off()
+
+
+# insect abundance ----
+
+aphid_full %>%
+  group_by(Year, SiteID, SampleID) %>%
+  summarise(totwkly = sum(Count)) %>%
+  summarise(meanbysite = mean(totwkly)) %>%
+  ggplot(aes(x = Year,
+             y = meanbysite)) +
+  geom_smooth() +
+  geom_point() +
+  scale_y_sqrt(expand = c(0, 0)) +
+  scale_x_continuous(breaks = 2005:2018, minor_breaks = NULL) +
+  labs(y = "Mean weekly capture per site",
+       title = "Aphid abundance per site in the Aphid Suction Trap Network") +
+  theme(panel.border = element_rect(color = "black", fill = NA, size = 1.5))
