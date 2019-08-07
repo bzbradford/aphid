@@ -2,7 +2,8 @@
 
 # Load packages ----
 library(tidyverse)
-
+library(lme4)
+library(mgcv)
 
 # Read pvy infectivity data ----
 
@@ -48,7 +49,7 @@ aphid_pvy =
 
 
 # collapse to aggregate counts
-aphid_pvy_aggr =
+aphid_pvy_aggr_risk =
   aphid_pvy %>%
   group_by(SampleID) %>%
   summarise(
@@ -59,8 +60,12 @@ aphid_pvy_aggr =
     Risk = as.integer(sum(PVYRisk)*10)
   )
 
+aphid_pvy_aggr_risk_wi =
+  aphid_pvy_aggr_risk %>%
+  filter(State == "WI")
+
 # collapse to aggregate counts, integers only
-aphid_pvy_aggr =
+aphid_pvy_aggr_count =
   aphid_pvy %>%
   group_by(SampleID) %>%
   summarise(
@@ -82,17 +87,46 @@ aphid_pvy %>%
   write.csv("out/wi_pvy_wkly.csv")
 
 
-# Phenology code -----
-library(lme4)
-library(mgcv)
+
+# generate annual count summaries and a total count by species, then save
+
+aphid_pvy %>%
+  filter(State == "WI") %>%
+  group_by(SpeciesName, Year) %>%
+  summarise(TotalAnnual = sum(Count)) %>%
+  summarise(MeanAnnual = mean(TotalAnnual)) %>%
+  write.csv("out/pvy wi total count.csv")
+
+test = aphid_pvy %>%
+  filter(State == "WI") %>%
+  droplevels()
+levels(test$SiteName)
+
+# CMs ---------------------------------------------------------------------
 
 # CMs from PVY Risk
 pvy_cm =
-  aphid_pvy_aggr %>%
+  aphid_pvy %>%
   {
     fmod =
       ranef(glmer(
         Risk ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+        data = .,
+        family = "poisson"
+      ))
+    data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
+               CM = fmod$GDD39[, 1])
+  }
+
+# CMs for particular species
+pvy_cm =
+  aphid_pvy %>%
+  filter(State == "WI",
+         SpeciesName == "Rhopalosiphum padi") %>%
+  {
+    fmod =
+      ranef(glmer(
+        Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
         data = .,
         family = "poisson"
       ))
@@ -117,27 +151,65 @@ pvy_gampts =
   ) %>%
   na.omit()
 
+
+# plots -------------------------------------------------------------------
+
+# risk index
 p =
   pvy_cm %>%
   ggplot(aes(x = GDD, y = CM)) +
-  scale_x_sqrt() +
-  stat_smooth(
-    method = "gam",
-    formula = y ~ s(x),
-    fill = "grey50",
-    colour = "Black",
-    size = 1.5
-  ) +
+  scale_x_sqrt(limits = c(500, 5000)) +
+  scale_y_continuous(limits = c(-1, 1)) +
   geom_abline(intercept = 0, slope = 0) +
-  labs(x = "GDDs",
-       y = "CMs (GDD39/86)",
-       title = paste("GDD39/86 fits for Suction Traps",
+  labs(x = "Degree Days (39/86)",
+       y = "Conditional mode (spline fit deviance)",
+       title = paste("Aggregate PVY risk index for Wisconsin",
                      min(aphid$Year), "-", max(aphid$Year))
   ) +
   theme(strip.text = element_text(size = 14, face = "bold")) +
   geom_line(data = pvy_gampreds, color = "red", size = 1.5) +
   geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
   geom_label(data = pvy_gampts, aes(x = GDD, y = CM, label = GDD))
+p
+
+ggsave("out/pvy risk cm wi.png",
+       plot = p,
+       type = "cairo-png",
+       h = 4,
+       w = 6,
+       dpi = 300)
+
+
+# species plots
+p =
+  pvy_cm %>%
+  ggplot(aes(x = GDD, y = CM)) +
+  scale_x_sqrt() +
+  geom_abline(intercept = 0, slope = 0) +
+  labs(x = "Degree Days (39/86)",
+       y = "Conditional mode (spline fit deviance)",
+       title = paste("Rhopalosiphum padi derived flight phenology")
+  ) +
+  theme(strip.text = element_text(size = 14, face = "bold")) +
+  geom_line(data = pvy_gampreds, color = "red", size = 1.5) +
+  geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
+  geom_label(data = pvy_gampts, aes(x = GDD, y = CM, label = GDD))
+p
+
+ggsave("out/wi r padi model fit.png",
+       plot = p,
+       type = "cairo-png",
+       h = 4,
+       w = 6,
+       dpi = 300)
+
+# soybean aphid counts
+aphid_pvy %>%
+  filter(State == "WI", SpeciesName == "Aphis glycines") %>%
+  mutate(Week = as.factor(Week)) %>%
+  ggplot(aes(x = Week, y = Count)) +
+  geom_boxplot() +
+  scale_y_sqrt()
 p
 
 
