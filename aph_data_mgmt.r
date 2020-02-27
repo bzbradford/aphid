@@ -36,7 +36,7 @@ expandFn = function(df) {
     mutate_if(is.character, as.factor)
 }
 
-# Expand dataset with zeros, drop dummy variable
+## Expand dataset with zeros, drop dummy variable ##
 aph_exp <- 
   aph_in %>%
   pivot_wider(names_from = "SpeciesName",
@@ -48,7 +48,20 @@ aph_exp <-
                values_to = "Count") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
 
-aph_exp <- expandFn(aph_in)
+
+## create state name and centroid dataset ##
+states <- 
+  tibble(
+    State = state.abb,
+    StateName = state.name,
+    StateLat = state.center$x,
+    StateLon = state.center$y
+  )
+
+# get a vector of state abbreviations sorted by northiness
+StateOrder <- states %>%
+  arrange(desc(StateLon)) %>%
+  .$State
 
 
 # join month num, state names, degree days, site info, and taxonomic info
@@ -61,15 +74,13 @@ aph_full <-
             by = 'SiteID') %>%
   left_join(aphid_spp,
             by = 'SpeciesName') %>%
-  left_join(tibble(State = state.abb, StateName = state.name)) %>%
+  left_join(states) %>%
   mutate_if(is.character, as.factor)
 
 
 # Export file (optional)
 aph_full %>%
   write_csv("data/aph_full.csv")
-
-states <- tibble(State = state.abb, StateName = state.name)
 
 
 
@@ -360,10 +371,7 @@ plt <-
   aphid %>%
   mutate(Year = as.character(Year),
          Count = log(Count + 1)) %>%
-  ggplot(aes(
-    x = GDD50,
-    y = Count
-  )) +
+  ggplot(aes(x = GDD50, y = Count)) +
   facet_wrap(~ SpeciesName, scales = "free") +
   scale_x_sqrt() +
   stat_smooth(
@@ -383,7 +391,7 @@ plt <-
   labs(
     x = "Growing Degree Days (50F/86F)",
     y = "Log-normalized aphid count",
-    title = "Aphid abundance by year and GDD (Suction Trap data 2005-2018)"
+    title = "Aphid abundance by year and GDD (Suction Trap data, 2005-2018)"
   ) +
   theme(strip.text = element_text(angle = 0, size = 12, face = "italic"))
 plt
@@ -394,19 +402,32 @@ ggsave("out/STN plot - aphid abundance by year and GDD.svg", h = 10, w = 16)
 
 
 ## Plot multi-year comparison of counts by week ##
-p = aphid %>%
-  ggplot(aes(x = Week, y = log10(Count + 1), color = as.factor(Year))) +
+plt <- 
+  aphid %>%
+  mutate(Year = as.character(Year),
+         Count = log(Count + 1)) %>%
+  ggplot(aes(x = Week, y = Count)) +
   facet_wrap( ~ SpeciesName, scales = "free") +
-  stat_smooth(method = "gam", formula = y ~ s(x), fill = NA, size = .5) +
+  stat_smooth(aes(color = Year),
+              method = "gam",
+              formula = y ~ s(x),
+              fill = NA,
+              size = .5) +
+  stat_smooth(color = "red",
+              method = "gam",
+              formula = y ~ s(x),
+              size = 1.25) +
   geom_abline(intercept = 0, slope = 0) +
   labs(aes(x = "Week",
-           y = "Log10 Count of Aphids",
-           title = "Multi-year comparison of aphid phenologies, NCR Suction Trap data 2005-2017",
-           legend = "Year"))
-p
-pdf("multiyear NCR aphid phenology by Week.pdf", h = 8.5, w = 11); p; dev.off()
+           y = "Log-normalized aphid abundance",
+           title = "Aphid abundance by week and year (Suction Trap data, 2005-2018)",
+           legend = "Year")) +
+  theme(strip.text = element_text(angle = 0, size = 12, face = "italic"))
+plt
+ggsave("out/STN plot - aphid abundance by year and week.svg", h = 10, w = 16)
 
 
+# boxplots by year and species, not very useful
 p = aphid %>%
   ggplot(aes(x = as.factor(Year), y = log10(Count + 1), group = Year, color = as.factor(Year))) +
   geom_boxplot() +
@@ -415,15 +436,9 @@ p = aphid %>%
   geom_smooth( method = "gam", formula = y ~ s(x) + 1, fill = "grey50", size = 1)
 p
 
-p = subset(aphid, Year == 2016) %>%
-  ggplot(aes(x = Julian, y = log10(Count + 1))) +
-  facet_grid(SpeciesName ~ .) +
-  geom_ribbon(aes(ymin = 0, ymax = 2))
-p
 
 
-
-# Russ charts Jan 2019 ----
+#### Russ charts Jan 2019 ####
 
 # Top 5 wis aphids
 russ_aphids = c(
@@ -435,64 +450,72 @@ russ_aphids = c(
   )
 
 #generate dataset
-aphid =
+aphid <- 
   aph_full %>%
   filter(SpeciesName %in% russ_aphids) %>%
   droplevels()
 
 
-# all species same graph
-p =
+## Violin plots by species and year ##
+plt <-
   aphid %>%
-  group_by(Year, Week, SpeciesName) %>%
-  summarize(TotCount = log(sum(Count)+1)) %>%
-  ggplot(aes(x = as.Date("2017-01-01")+(Week-1)*7, y = TotCount)) +
-  geom_area(aes(fill = SpeciesName)) +
+  group_by(Year, Week, SpeciesName, SiteID) %>%
+  summarise(Count = sum(Count)) %>%
+  summarise(MeanCount = log(mean(Count) + 1)) %>%
+  ggplot(aes(x = as.Date("2020-01-01") + (Week - 1) * 7,
+             fill = SpeciesName)) +
+  geom_hline(yintercept = 0, linetype = "dotted", size = .25, color = "grey") +
+  geom_area(aes(y = MeanCount)) +
+  geom_area(aes(y = -MeanCount)) +
   facet_grid(Year ~ SpeciesName, scales = "free_x") +
   scale_x_date(date_labels = "%b") +
-  labs(x = "Week of Year",
+  labs(title = "Aphid abundance over time by year (Suction trap data 2005-2018)",
+       x = "",
        y = "Log abundance") +
-  theme(panel.spacing = unit(.1, "lines"),
-        strip.text.x = element_text(size = 12, face = "bold"),
-        strip.text.y = element_text(size = 12, face = "bold"),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        legend.position = "none")
-p
-ggsave("out/russ aphids same graph.png",
-       p,
-       w=1200,
-       h=900)
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = .5),
+    panel.spacing = unit(.25, "lines"),
+    strip.background = element_rect(color = NA, fill = NA),
+    strip.text.x = element_text(size = 10, face = "italic"),
+    strip.text.y = element_text(size = 10),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+  )
+plt
+ggsave("out/Russ aphids 2019 violin plots by year.png", plt, h = 10, w = 16)
 
 
-# all species same graph
-p =
+## violin plots by species and state ##
+plt <-
   aphid %>%
-  group_by(Year, Week, SpeciesName) %>%
-  summarize(TotCount = mean(Count)) %>%
-  ggplot(aes(x = as.Date("2017-01-01")+(Week-1)*7, y = TotCount)) +
-  geom_area(aes(fill = SpeciesName)) +
+  mutate(State = factor(State, levels = StateOrder)) %>%
+  group_by(State, Week, SpeciesName, SiteID) %>%
+  summarise(Count = sum(Count)) %>% # get site totals
+  summarise(MeanCount = log(mean(Count) + 1)) %>% # average across sites
+  ggplot(aes(x = as.Date("2017-01-01") + (Week - 1) * 7,
+             fill = SpeciesName)) +
+  geom_hline(yintercept = 0) +
+  geom_area(aes(y = MeanCount)) +
+  geom_area(aes(y = -MeanCount)) +
+  facet_grid(State ~ SpeciesName, scales = "free_x") +
   scale_x_date(date_labels = "%b") +
-  labs(x = "",
-       y = "Mean Count") +
-  theme(panel.spacing = unit(.1, "lines"),
-        strip.text.x = element_text(size = 12, face = "bold"),
-        strip.text.y = element_text(size = 12, face = "bold"),
-        legend.position = "none")
-p
-p + scale_y_sqrt()
+  labs(title = "Aphid abundance at trap sites (Suction trap data, 2005-2018)",
+       x = "",
+       y = "Log abundance") +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = .5),
+    panel.spacing = unit(.25, "lines"),
+    strip.background = element_rect(color = NA, fill = NA),
+    strip.text.x = element_text(size = 10, face = "italic"),
+    strip.text.y = element_text(size = 10),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+  )
+plt
+ggsave("out/Russ aphids 2019 violin plots by state.png", plt, h = 10, w = 16)
 
-p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName, scales = "free_y") %>%
-  ggsave("out/mean_counts_freey_sqrty.png", ., w = 1200, h = 900)
-
-p + facet_grid(Year ~ SpeciesName, scales = "free_y") %>%
-  ggsave("out/mean_counts_freey_plainy.png", ., w = 1200, h = 900)
-
-p + scale_y_sqrt() + facet_grid(Year ~ SpeciesName) %>%
-  ggsave("out/mean_counts_samey_sqrty.png", ., w = 1200, h = 900)
-
-p + facet_grid(Year ~ SpeciesName) %>%
-  ggsave("out/mean_counts_samey_plainy.png", ., w = 1200, h = 900)
 
 
 # individual graphs for each species
@@ -521,8 +544,7 @@ for (s in russ_aphids) {
 
 
 
-# glycines IDW export for Emily ----
-
+#### Glycines IDW export for Emily ####
 
 # filter
 glycines = aph_full %>%
@@ -530,10 +552,8 @@ glycines = aph_full %>%
   mutate(MonthName = as.factor(format.Date(Date, "%b"))) %>%
   droplevels()
 
-
 # export
 glycines %>% write.csv('out/glycines.csv')
-
 
 # mean glycines counts by site and year for Jul & Aug
 glycines_jul_aug =
@@ -543,7 +563,6 @@ glycines_jul_aug =
   summarize(MeanCount = mean(Count))
 glycines_jul_aug %>% write.csv("out/glycines-jul-aug.csv")
 
-
 # mean glycines counts by site and year for Sep & Oct
 glycines_sep_oct =
   glycines %>%
@@ -551,7 +570,6 @@ glycines_sep_oct =
   group_by(Year, SiteID) %>%
   summarize(MeanCount = mean(Count))
 glycines_sep_oct %>% write.csv("out/glycines-sep-oct.csv")
-
 
 # mean glycines counts by site and year for Jul thru Oct
 glycines_jul_oct =
@@ -563,10 +581,13 @@ glycines_jul_oct =
 glycines_jul_oct %>% write.csv("out/glycines-jul-oct.csv")
 
 
-# Aphis glycines counts by state ----
+
+#### Aphis glycines counts by state ####
 
 aph_full %>%
   filter(SpeciesName == "Aphis glycines") %>%
+  mutate(State = factor(State, levels = StateOrder),
+         Year = as.character(Year)) %>%
   group_by(State, Year) %>%
   summarise(Count = mean(Count) + 1) %>%
   arrange(desc(Count)) %>%
@@ -575,7 +596,8 @@ aph_full %>%
   facet_grid(State ~ .) +
   geom_bar(stat = "identity", aes(fill = State)) +
   scale_y_log10() +
-  labs(x = "",
+  labs(title = "Aphis glycinces abundance by year and state",
+       x = "",
        y = "Mean count per week") +
   theme_gray() +
   theme(
@@ -617,7 +639,8 @@ p
 ggsave("out/padi captures.png", p, w = 12, h = 5, u = "in")
 
 
-# insect abundance ----
+
+#### Total insect abundance over time ####
 
 aph_full %>%
   group_by(Year, SiteID, SampleID) %>%
