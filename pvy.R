@@ -1,20 +1,16 @@
 ### PVY-relevant aphid species and infection risk ###
 
-# Load packages ----
 library(tidyverse)
 library(lme4)
 library(mgcv)
 
-# Read pvy infectivity data ----
 
-pvy_inf = read.csv("data/pvy-inf.csv", header = TRUE)
-names(pvy_inf) = c("SpeciesName", "InfLo", "InfHi", "InfAvg")
+# Read pvy infectivity data
+pvy_inf <- read_csv("data/pvy-inf.csv")
 
 
-# Subsets of the aphid dataset ----
-
-# all potential pvy vectors
-aphid_pvy =
+# filter by all potential pvy vectors
+aphid_pvy <- 
   aphid_full %>%
   filter(
     SpeciesName %in% c(
@@ -37,19 +33,58 @@ aphid_pvy =
   droplevels()
 
 
-# keep aphid species with PVY risk values
-aphid_pvy = 
+# OR filter by aphid species with PVY risk values
+aphid_pvy <- 
   aphid_full %>%
+  filter(SpeciesName %in% pvy_inf$SpeciesName) %>%
+  mutate_if(is.factor, as.character) %>%
   left_join(pvy_inf) %>%
-  mutate(SpeciesName = as.factor(SpeciesName)) %>%
-  drop_na(InfAvg) %>%
-  mutate(PVYCount = Count*asin(sqrt(InfAvg)),
-         PVYRisk = log(Count + 1)*asin(sqrt(InfAvg))) %>%
-  droplevels()
+  mutate(PVYCount = Count*asin(sqrt(InfRtAvg)),
+         PVYRisk = log(Count + 1)*asin(sqrt(InfRtAvg))) %>%
+  mutate_if(is.character, as.factor)
 
+
+aphid_pvy_aggr_risk_wi =
+  aphid_pvy_aggr_risk %>%
+  filter(State == "WI")
+
+
+# Summaries ---------------------------------------------------------------
+
+# generate weekly mean risk scores
+pvy_risk_wkly_wi <- 
+  aphid_pvy %>%
+  filter(State == "WI") %>%
+  select(SpeciesName, Week, Count, PVYRisk) %>%
+  group_by(SpeciesName, Week) %>%
+  summarise(MeanCount = mean(Count), MeanRisk = mean(PVYRisk))
+pvy_risk_wkly_wi %>%
+  write_csv("out/pvy risk wkly wisc.csv")
+
+
+
+# generate annual count summaries and a total count by species, then save
+
+pvy_risk_yrly_wi <- 
+  aphid_pvy %>%
+  filter(State == "WI") %>%
+  group_by(SpeciesName, Year) %>%
+  summarise(TotalRiskYrly = sum(Count)) %>%
+  summarise(MeanRiskYrly = mean(TotalRiskYrly))
+pvy_risk_yrly_wi %>%
+  write.csv("out/pvy wi total count.csv")
+
+test = aphid_pvy %>%
+  filter(State == "WI") %>%
+  droplevels()
+levels(test$SiteName)
+
+
+
+#### PVY phenology plots ####
 
 # collapse to aggregate counts
-aphid_pvy_aggr_risk =
+pvy_aggr_risk <- 
   aphid_pvy %>%
   group_by(SampleID) %>%
   summarise(
@@ -60,86 +95,45 @@ aphid_pvy_aggr_risk =
     Risk = as.integer(sum(PVYRisk)*10)
   )
 
-aphid_pvy_aggr_risk_wi =
-  aphid_pvy_aggr_risk %>%
-  filter(State == "WI")
-
-# collapse to aggregate counts, integers only
-aphid_pvy_aggr_count =
-  aphid_pvy %>%
-  group_by(SampleID) %>%
-  summarise(
-    State = State[1],
-    SiteID = SiteID[1],
-    Year = Year[1],
-    GDD39 = GDD39[1],
-    Count = as.integer(sum(PVYCount))
-  )
-
-
-# Summaries ---------------------------------------------------------------
-
-# generate weekly mean risk scores
-aphid_pvy %>%
-  select(SpeciesName, Week, Count, PVYRisk) %>%
-  group_by(SpeciesName, Week) %>%
-  summarise(MeanCount = mean(Count), MeanRisk = mean(PVYRisk)) %>%
-  write.csv("out/wi_pvy_wkly.csv")
-
-
-
-# generate annual count summaries and a total count by species, then save
-
-aphid_pvy %>%
-  filter(State == "WI") %>%
-  group_by(SpeciesName, Year) %>%
-  summarise(TotalAnnual = sum(Count)) %>%
-  summarise(MeanAnnual = mean(TotalAnnual)) %>%
-  write.csv("out/pvy wi total count.csv")
-
-test = aphid_pvy %>%
-  filter(State == "WI") %>%
-  droplevels()
-levels(test$SiteName)
-
-# CMs ---------------------------------------------------------------------
-
-# CMs from PVY Risk
-pvy_cm =
-  aphid_pvy %>%
+# Generate conditional modes from aggregate risk scores
+pvy_cm <-
+  pvy_aggr_risk %>%
   {
-    fmod =
-      ranef(glmer(
-        Risk ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
-        data = .,
-        family = "poisson"
-      ))
-    data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
-               CM = fmod$GDD39[, 1])
+    require(lme4)
+    fit = glmer(Risk ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+                data = .,
+                family = "poisson")
+    fmod = ranef(fit)
+    tibble(GDD = as.numeric(rownames(fmod$GDD39)),
+           CM = fmod$GDD39[, 1])
   }
 
-# CMs for particular species
-pvy_cm =
+# CMs for particular species rather than the aggregate risk
+pvy_cm <-
   aphid_pvy %>%
   filter(State == "WI",
          SpeciesName == "Rhopalosiphum padi") %>%
   {
-    fmod =
-      ranef(glmer(
-        Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
-        data = .,
-        family = "poisson"
-      ))
-    data.frame(GDD = as.numeric(rownames(fmod$GDD39)),
-               CM = fmod$GDD39[, 1])
+    fit = glmer(Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
+                data = .,
+                family = "poisson")
+    fmod = ranef(fit)
+    tibble(GDD = as.numeric(rownames(fmod$GDD39)),
+           CM = fmod$GDD39[, 1])
   }
 
-pvy_gampreds =
-  cbind(data.frame(GDD = 1:7500),
+pvy_gampreds <-
+  cbind(tibble(GDD = 1:7500),
         CM = predict.gam(gam(CM ~ s(GDD), data = pvy_cm),
-                    data.frame(GDD = 1:7500)))
+                         data.frame(GDD = 1:7500)))
 
-pvy_gampts =
+pvy_gampreds <-
+  tibble(GDD = 1:7500,
+         CM = predict.gam(
+           gam(CM ~ s(GDD), data = pvy_cm),
+           data.frame(GDD = 1:7500)))
+
+pvy_gampts <- 
   pvy_gampreds %>%
   mutate(
     type = case_when(
@@ -155,7 +149,7 @@ pvy_gampts =
 # plots -------------------------------------------------------------------
 
 # risk index
-p =
+plt <- 
   pvy_cm %>%
   ggplot(aes(x = GDD, y = CM)) +
   scale_x_sqrt(limits = c(500, 5000)) +
@@ -170,7 +164,7 @@ p =
   geom_line(data = pvy_gampreds, color = "red", size = 1.5) +
   geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
   geom_label(data = pvy_gampts, aes(x = GDD, y = CM, label = GDD))
-p
+plt
 
 ggsave("out/pvy risk cm wi.png",
        plot = p,
