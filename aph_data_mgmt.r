@@ -4,18 +4,16 @@
 library(tidyverse)
 
 # read aphid counts (including dummy counts)
-aph_in <- read_csv("data/stn_data_20191016.csv") %>%
+aphid_in <- read_csv("data/stn_data_20191016.csv") %>%
   filter(!SpeciesName %in% c('Phylloxeridae', 'Adelgidae')) %>%
   mutate(Month = as.numeric(format.Date(Date, format = "%m"))) %>%
   mutate_if(is.character, as.factor)
 
-dummy <- "_dummy_"
-
 # site info
-aph_sites <- read_csv("data/stn_sites.csv")
+aphid_sites <- read_csv("data/stn_sites.csv")
 
 # species names
-aph_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
+aphid_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
 
 
 
@@ -37,12 +35,12 @@ expandFn = function(df) {
 }
 
 ## Expand dataset with zeros, drop dummy variable ##
-aph_exp <- 
-  aph_in %>%
+aphid_exp <- 
+  aphid_in %>%
   pivot_wider(names_from = "SpeciesName",
               values_from = "Count",
               values_fill = list(Count = 0)) %>%
-  select(-dummy) %>%
+  select(-"_dummy_") %>%
   pivot_longer(cols = 11:ncol(.),
                names_to = "SpeciesName",
                values_to = "Count") %>%
@@ -65,8 +63,8 @@ StateOrder <- states %>%
 
 
 # join month num, state names, degree days, site info, and taxonomic info
-aph_full <- 
-  aph_exp %>%
+aphid_full <- 
+  aphid_exp %>%
   mutate_if(is.factor, as.character) %>%
   left_join(prism[, c('SiteID', 'Date', 'GDD39', 'GDD50')],
             by = c('SiteID', 'Date')) %>%
@@ -606,12 +604,14 @@ aph_full %>%
     strip.text.y = element_text(angle = 0, size = 12, face = "bold")
   )
 
+
+## bar plots by year for specific species ##
 sp = "Aphis glycines"
 sp = "Rhopalosiphum maidis"
 sp = "Rhopalosiphum padi"
 sp = "Sitobion avenae"
 sp = "Schizaphis graminum"
-p =
+plt <- 
   aph_full %>%
   filter(SpeciesName == sp) %>% # edit species name here
   mutate(Year = as.Date(paste0(Year, "-01-01"))) %>%
@@ -635,7 +635,7 @@ p =
     strip.text.x = element_text(size = 12, face = "bold"),
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
-p
+plt
 ggsave("out/padi captures.png", p, w = 12, h = 5, u = "in")
 
 
