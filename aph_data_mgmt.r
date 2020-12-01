@@ -1,7 +1,12 @@
 
-#### Read in suction data ####
+# libraries ---------------------------------------------------------------
 
 library(tidyverse)
+
+
+
+
+# load data files ---------------------------------------------------------
 
 # read aphid counts (including dummy counts)
 aphid_in <- read_csv("data/stn_data_20191016.csv") %>%
@@ -17,7 +22,7 @@ aphid_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
 
 
 
-#### Expand and join dataset ####
+# Expand and join dataset --------------------------------------------------
 
 expandFn = function(df) {
   df %>%
@@ -80,9 +85,15 @@ aphid_full <-
 aph_full %>%
   write_csv("data/aph_full.csv")
 
+# export Minnesota data
+aphid_full %>%
+  filter(State == "MN") %>%
+  write_csv(paste0("mn_aphids_", min(.$Year), "-", max(.$Year), ".csv"))
 
 
-#### SCRI data ####
+
+
+# SCRI/nonsuction data ---------------------------------------------------------------
 
 SCRI_ID <- read_csv("data/scri_aphids_id.csv")
 SCRI_ID_full <- 
@@ -93,12 +104,64 @@ SCRI_ID_full <-
 SCRI_ID_full %>% write_csv("out/scri_id_aphids.csv")
 
 
+mn_aphids <- read_csv("data/MN-NE-ND-SD-WI Aphids 1992-2003.csv", col_types = list(Type = "f", Trap = "f")) %>%
+  filter(State == "MN") %>%
+  filter(Species != "?")
 
-#### Subset aphid data ####
+# simple summary
+mn_aphids %>%
+  summarise(
+    tot_years = n_distinct(Year),
+    tot_sites = n_distinct(Site),
+    tot_captures = sum(Count),
+    tot_species = n_distinct(Species)
+    )
+
+# per-year summary
+mn_aphids %>%
+  group_by(Year) %>%
+  summarise(
+    tot_sites = n_distinct(Site),
+    tot_captures = sum(Count),
+    tot_species = n_distinct(Species)
+  ) %>%
+  write_csv("out/mn summary.csv")
+
+mn_aphids %>%
+  group_by(Year, Species) %>%
+  summarise(meanCount = mean(Count)) %>%
+  pivot_wider(names_from = Year, values_from = meanCount) %>%
+  replace(is.na(.), 0) %>%
+  mutate(Mean = rowMeans(.[2:10])) %>%
+  arrange(desc(Mean)) %>%
+  write_csv("out/mn aphid means by year.csv")
+
+
+# average trap capture top 10 aphids
+mn_aphids %>%
+  add_count(Species, wt = Count, name = "tot") %>%
+  mutate(rank = dense_rank(desc(tot))) %>%
+  filter(rank <= 10) %>%
+  arrange(rank) %>%
+  mutate(Species = fct_inorder(Species)) %>%
+  group_by(Species, Year) %>%
+  summarise(year_tot = mean(Count)) %>%
+  ggplot(aes(x = Year, y = year_tot)) +
+  geom_col() +
+  facet_wrap(~Species) +
+  labs(
+    title = "Minnesota aphid counts from historical trapping efforts",
+    y = "Mean count per trap"
+  )
+ggsave("out/mn top 10 aphids.png")
+
+
+
+# Subset aphid data -------------------------------------------------------
 
 # Species list from Frost code
 aphid <- 
-  aph_full %>%
+  aphid_full %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
