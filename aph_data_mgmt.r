@@ -6,19 +6,62 @@ library(tidyverse)
 
 
 
+# prism handler -----------------------------------------------------------
+
+# load prism csvs
+prism_in <- list.files("./prism", pattern = glob2rx("PRISM_*.csv"), full.names = T) %>%
+  map_df(~read_csv(., skip = 10))
+
+
+# define GDD function
+gdd_fn <- function(tmin, tmax, lower, upper) {
+  pmax(0, (pmax(tmin, lower) + pmin(tmax, upper)) / 2 - lower)
+}
+
+
+# fix names and add gdd
+prism <- prism_in %>%
+  rename(
+    SiteID = Name,
+    ElevFt = `Elevation (ft)`,
+    tminF = `tmin (degrees F)`,
+    tmaxF = `tmax (degrees F)`
+  ) %>%
+  mutate(
+    State = substr(SiteID, 1, 2),
+    Year = as.numeric(format(Date, "%Y")),
+    Julian = lubridate::yday(Date)) %>%
+  group_by(SiteID, Year) %>%
+  arrange(SiteID, Date) %>%
+  mutate(
+    GDD39 = cumsum(gdd_fn(tminF, tmaxF, 39, 86)),
+    GDD50 = cumsum(gdd_fn(tminF, tmaxF, 50, 86))) %>%
+  ungroup()
+
+
+# GDD accumulation by state and year
+prism %>%
+  ggplot(aes(x = Date, y = GDD39, color = SiteID)) +
+  geom_line() +
+  facet_grid(State ~ Year, scales = "free_x") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(color = "none")
+
+
+
 # load data files ---------------------------------------------------------
 
 # read aphid counts (including dummy counts)
-aphid_in <- read_csv("data/stn_data_20191016.csv") %>%
+aph_in <- read_csv("data/stn_data_20191016.csv") %>%
   filter(!SpeciesName %in% c('Phylloxeridae', 'Adelgidae')) %>%
   mutate(Month = as.numeric(format.Date(Date, format = "%m"))) %>%
   mutate_if(is.character, as.factor)
 
 # site info
-aphid_sites <- read_csv("data/stn_sites.csv")
+aph_sites <- read_csv("data/stn_sites.csv")
 
 # species names
-aphid_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
+aph_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
 
 
 
@@ -40,15 +83,17 @@ expandFn = function(df) {
 }
 
 ## Expand dataset with zeros, drop dummy variable ##
-aphid_exp <- 
-  aphid_in %>%
-  pivot_wider(names_from = "SpeciesName",
-              values_from = "Count",
-              values_fill = list(Count = 0)) %>%
+aph_exp <- 
+  aph_in %>%
+  pivot_wider(
+    names_from = "SpeciesName",
+    values_from = "Count",
+    values_fill = list(Count = 0)) %>%
   select(-"_dummy_") %>%
-  pivot_longer(cols = 11:ncol(.),
-               names_to = "SpeciesName",
-               values_to = "Count") %>%
+  pivot_longer(
+    cols = 11:ncol(.),
+    names_to = "SpeciesName",
+    values_to = "Count") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
 
 
@@ -57,8 +102,13 @@ states <-
   tibble(
     State = state.abb,
     StateName = state.name,
-    StateLat = state.center$x,
-    StateLon = state.center$y
+    StateLon = state.center$x,
+    StateLat = state.center$y
+  ) %>%
+  arrange(desc(StateLat)) %>%
+  mutate(
+    State = fct_inorder(State),
+    StateName = fct_inorder(StateName)
   )
 
 # get a vector of state abbreviations sorted by northiness
@@ -68,8 +118,8 @@ StateOrder <- states %>%
 
 
 # join month num, state names, degree days, site info, and taxonomic info
-aphid_full <- 
-  aphid_exp %>%
+aph_full <- 
+  aph_exp %>%
   mutate_if(is.factor, as.character) %>%
   left_join(prism[, c('SiteID', 'Date', 'GDD39', 'GDD50')],
             by = c('SiteID', 'Date')) %>%
@@ -83,77 +133,12 @@ aphid_full <-
 
 # Export file (optional)
 aph_full %>%
-  write_csv("data/aph_full.csv")
+  write_csv("data/aphid stn data export.csv.gz")
 
-# export Minnesota data
-aphid_full %>%
-  filter(State == "MN") %>%
-  write_csv(paste0("mn_aphids_", min(.$Year), "-", max(.$Year), ".csv"))
-
-
-
-
-# SCRI/nonsuction data ---------------------------------------------------------------
-
-SCRI_ID <- read_csv("data/scri_aphids_id.csv")
-SCRI_ID_full <- 
-  expandFn(SCRI_ID) %>%
-  left_join(aphid_spp,
-            by = "SpeciesName") %>%
-  mutate(SpeciesName = as.factor(SpeciesName))
-SCRI_ID_full %>% write_csv("out/scri_id_aphids.csv")
-
-
-mn_aphids <- read_csv("data/MN-NE-ND-SD-WI Aphids 1992-2003.csv", col_types = list(Type = "f", Trap = "f")) %>%
-  filter(State == "MN") %>%
-  filter(Species != "?")
-
-# simple summary
-mn_aphids %>%
-  summarise(
-    tot_years = n_distinct(Year),
-    tot_sites = n_distinct(Site),
-    tot_captures = sum(Count),
-    tot_species = n_distinct(Species)
-    )
-
-# per-year summary
-mn_aphids %>%
-  group_by(Year) %>%
-  summarise(
-    tot_sites = n_distinct(Site),
-    tot_captures = sum(Count),
-    tot_species = n_distinct(Species)
-  ) %>%
-  write_csv("out/mn summary.csv")
-
-mn_aphids %>%
-  group_by(Year, Species) %>%
-  summarise(meanCount = mean(Count)) %>%
-  pivot_wider(names_from = Year, values_from = meanCount) %>%
-  replace(is.na(.), 0) %>%
-  mutate(Mean = rowMeans(.[2:10])) %>%
-  arrange(desc(Mean)) %>%
-  write_csv("out/mn aphid means by year.csv")
-
-
-# average trap capture top 10 aphids
-mn_aphids %>%
-  add_count(Species, wt = Count, name = "tot") %>%
-  mutate(rank = dense_rank(desc(tot))) %>%
-  filter(rank <= 10) %>%
-  arrange(rank) %>%
-  mutate(Species = fct_inorder(Species)) %>%
-  group_by(Species, Year) %>%
-  summarise(year_tot = mean(Count)) %>%
-  ggplot(aes(x = Year, y = year_tot)) +
-  geom_col() +
-  facet_wrap(~Species) +
-  labs(
-    title = "Minnesota aphid counts from historical trapping efforts",
-    y = "Mean count per trap"
-  )
-ggsave("out/mn top 10 aphids.png")
+# # export Minnesota data
+# aphid_full %>%
+#   filter(State == "MN") %>%
+#   write_csv(paste0("mn_aphids_", min(.$Year), "-", max(.$Year), ".csv"))
 
 
 
@@ -221,7 +206,8 @@ aphid <- filter(aphid, State == "WI")
 
 
 
-#### Numerical summaries ####
+
+# Numerical summaries -----------------------------------------------------
 
 # summarise by total count
 aphid %>%
@@ -341,18 +327,15 @@ aph_full %>%
 
 
 
-#### Summary plots ####
+
+# Summary plots -----------------------------------------------------------
 
 ## Plot of counts by state ##
-plt <- 
-  aphid %>%
+aphid %>%
   group_by(State, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
   arrange(SpeciesName, desc(totcount)) %>%
-  ggplot(aes(
-    x = reorder(SpeciesName, totcount),
-    y = totcount
-  )) +
+  ggplot(aes(x = reorder(SpeciesName, totcount), y = totcount)) +
   facet_grid( ~ State) +
   geom_bar(stat = "identity") +
   scale_y_sqrt() +
@@ -360,24 +343,17 @@ plt <-
   labs(
     x = "",
     y = "Mean Count",
-    title = paste0(
-      "Aphid Suction Trap Network (",
-      min(aphid$Year),
-      "-",
-      max(aphid$Year),
-      "): Captures by State"
-    )
-  ) +
-  theme(axis.text.x = element_text(angle = 90, vjust = .5),
-        legend.position = "none")
-plt
-ggsave("out/Plot of counts by state.svg", plt, h = 6, w = 10)
+    title = paste0("Aphid Suction Trap Network (", min(aphid$Year), "-", max(aphid$Year), "): Captures by State")) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = .5),
+    legend.position = "none")
+
+ggsave("out/Plot of counts by state.svg", h = 6, w = 10)
 
 
 
 ## Plot counts by year ##
-plt <- 
-  aphid %>%
+aphid %>%
   filter(State == "WI") %>%
   group_by(Year, SpeciesName) %>%
   summarise(totcount = sum(Count)) %>%
@@ -386,25 +362,20 @@ plt <-
   facet_wrap(~ reorder(SpeciesName, -totcount)) +
   geom_bar(stat = "identity") +
   scale_y_sqrt() +
-  labs(x = "",
-       y = "Mean Count",
-       title = paste("Aphid Suction Trap Network (",
-                     min(aphid$Year),
-                     "-",
-                     max(aphid$Year),
-                     "): Captures by Year",
-                     sep = '')) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
-        strip.text = element_text(size = 12, face = "italic"),
-        legend.position = "none")
-plt
-ggsave("out/STN plot - counts by year.svg", plt, h = 6, w = 10)
+  labs(
+    x = "", y = "Mean Count",
+    title = paste("Aphid Suction Trap Network (", min(aphid$Year), "-", max(aphid$Year), "): Captures by Year", sep = '')) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    strip.text = element_text(size = 12, face = "italic"),
+    legend.position = "none")
+
+ggsave("out/STN plot - counts by year.svg", h = 6, w = 10)
 
 
 
 ## Plot counts by state and year ##
-plt <- 
-  aphid %>%
+aphid %>%
   group_by(State, Year, SpeciesName) %>%
   summarise(totcount = mean(Count)) %>%
   arrange(SpeciesName, desc(totcount)) %>%
@@ -499,7 +470,8 @@ p
 
 
 
-#### Russ charts Jan 2019 ####
+
+# Russ charts Jan 2019 ----------------------------------------------------
 
 # Top 5 wis aphids
 russ_aphids = c(
@@ -605,7 +577,8 @@ for (s in russ_aphids) {
 
 
 
-#### Glycines IDW export for Emily ####
+
+# Glycines IDW export for Emily -------------------------------------------
 
 # filter
 glycines = aph_full %>%
@@ -643,7 +616,8 @@ glycines_jul_oct %>% write.csv("out/glycines-jul-oct.csv")
 
 
 
-#### Aphis glycines counts by state ####
+
+# Aphis glycines counts by state ------------------------------------------
 
 aph_full %>%
   filter(SpeciesName == "Aphis glycines") %>%
@@ -703,7 +677,7 @@ ggsave("out/padi captures.png", p, w = 12, h = 5, u = "in")
 
 
 
-#### Total insect abundance over time ####
+# Total insect abundance over time ----------------------------------------
 
 aph_full %>%
   group_by(Year, SiteID, SampleID) %>%
