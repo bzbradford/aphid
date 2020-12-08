@@ -1,4 +1,4 @@
-﻿SpeciesName,InfLow,InfUp,InfAvg
+﻿SpeciesName,InfRtLow,InfRtHi,InfRtAvg
 Acyrthosiphon pisum,0.07,0.14,0.105
 Aphis craccivora,0.04,0.04,0.04
 Aphis glycines,0.14,0.75,0.445

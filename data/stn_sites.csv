@@ -1,4 +1,4 @@
-﻿SiteID,State,StateName,SiteName,SiteCode,Lat,Lon,Confirmed,Name of trap location,Collector,Inception
+﻿SiteID,State,StateName,SiteName,SiteCode,Lat,Lon,Confirmed,OnProperty,Collector,Inception
 IAAME,IA,Iowa,Ames,AME,42.017973,-93.777653,Y,Iowa State University (ISU) Bio Century Farm near Ames,E. Hodgson,2005
 IAKAN,IA,Iowa,Kanawha,KAN,42.93082778,-93.79509444,Y,Iowa State University (ISU) Northern Research Farm,M. Schnabel,2016
 IAMCN,IA,Iowa,McNay,MCN,40.972683,-93.423704,Y,ISU McNay Research and Demonstration Farm,N. Piekema,2005
