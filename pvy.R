@@ -10,8 +10,8 @@ pvy_inf <- read_csv("data/pvy-inf.csv")
 
 
 # filter by all potential pvy vectors
-aphid_pvy <- 
-  aphid_full %>%
+aph_pvy <- 
+  aph_full %>%
   filter(
     SpeciesName %in% c(
       "Myzus persicae",
@@ -34,8 +34,8 @@ aphid_pvy <-
 
 
 # OR filter by aphid species with PVY risk values
-aphid_pvy <- 
-  aphid_full %>%
+aph_pvy <- 
+  aph_full %>%
   filter(SpeciesName %in% pvy_inf$SpeciesName) %>%
   mutate_if(is.factor, as.character) %>%
   left_join(pvy_inf) %>%
@@ -44,16 +44,13 @@ aphid_pvy <-
   mutate_if(is.character, as.factor)
 
 
-aphid_pvy_aggr_risk_wi =
-  aphid_pvy_aggr_risk %>%
-  filter(State == "WI")
 
 
 # Summaries ---------------------------------------------------------------
 
 # generate weekly mean risk scores
 pvy_risk_wkly_wi <- 
-  aphid_pvy %>%
+  aph_pvy %>%
   filter(State == "WI") %>%
   select(SpeciesName, Week, Count, PVYRisk) %>%
   group_by(SpeciesName, Week) %>%
@@ -66,7 +63,7 @@ pvy_risk_wkly_wi %>%
 # generate annual count summaries and a total count by species, then save
 
 pvy_risk_yrly_wi <- 
-  aphid_pvy %>%
+  aph_pvy %>%
   filter(State == "WI") %>%
   group_by(SpeciesName, Year) %>%
   summarise(TotalRiskYrly = sum(Count)) %>%
@@ -81,11 +78,12 @@ levels(test$SiteName)
 
 
 
-#### PVY phenology plots ####
+
+# PVY phenology, all spp -----------------------------------------------------
 
 # collapse to aggregate counts
 pvy_aggr_risk <- 
-  aphid_pvy %>%
+  aph_pvy %>%
   group_by(SampleID) %>%
   summarise(
     State = State[1],
@@ -99,39 +97,24 @@ pvy_aggr_risk <-
 pvy_cm <-
   pvy_aggr_risk %>%
   {
-    require(lme4)
-    fit = glmer(Risk ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
-                data = .,
-                family = "poisson")
-    fmod = ranef(fit)
-    tibble(GDD = as.numeric(rownames(fmod$GDD39)),
-           CM = fmod$GDD39[, 1])
-  }
-
-# CMs for particular species rather than the aggregate risk
-pvy_cm <-
-  aphid_pvy %>%
-  filter(State == "WI",
-         SpeciesName == "Rhopalosiphum padi") %>%
-  {
-    fit = glmer(Count ~ 1 + (1 | GDD39) + (1 | Year) + (1 | SiteID),
-                data = .,
-                family = "poisson")
-    fmod = ranef(fit)
+    fmod <- lme4::ranef(lme4::glmer(
+      Risk ~ 1 +
+        (1 | Year) +
+        (1 | State) +
+        (1 | SiteID) +
+        (1 | GDD39),
+      data = .,
+      family = "poisson"))
     tibble(GDD = as.numeric(rownames(fmod$GDD39)),
            CM = fmod$GDD39[, 1])
   }
 
 pvy_gampreds <-
-  cbind(tibble(GDD = 1:7500),
-        CM = predict.gam(gam(CM ~ s(GDD), data = pvy_cm),
-                         data.frame(GDD = 1:7500)))
-
-pvy_gampreds <-
-  tibble(GDD = 1:7500,
-         CM = predict.gam(
-           gam(CM ~ s(GDD), data = pvy_cm),
-           data.frame(GDD = 1:7500)))
+  tibble(
+    GDD = 1:7500,
+    CM = mgcv::predict.gam(
+      mgcv::gam(CM ~ s(GDD), data = pvy_cm),
+      data.frame(GDD = 1:7500)))
 
 pvy_gampts <- 
   pvy_gampreds %>%
@@ -140,38 +123,35 @@ pvy_gampts <-
       sign(lag(CM)) < sign(CM) ~ "RI",
       sign(lag(CM)) > sign(CM) ~ "FI",
       lag(CM) < CM & CM > lead(CM) ~ "max",
-      lag(CM) > CM & CM < lead(CM) ~ "min"
-    )
-  ) %>%
+      lag(CM) > CM & CM < lead(CM) ~ "min")) %>%
   na.omit()
+
+
+# risk index
+pvy_cm %>%
+  ggplot(aes(x = GDD, y = CM)) +
+  geom_abline(intercept = 0, slope = 0) +
+  geom_line(data = pvy_gampreds, color = "red", size = 1.5) +
+  geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
+  geom_label(data = pvy_gampts, aes(x = GDD, y = CM, label = GDD)) +
+  scale_x_sqrt(limits = c(500, 5000)) +
+  scale_y_continuous(limits = c(-1, 1)) +
+  labs(x = "Degree Days (39/86)",
+    y = "Conditional mode (spline fit deviance)",
+    title = paste("Aggregate PVY risk index derived from Suction Trap data",
+      min(aphid$Year), "-", max(aphid$Year))
+  ) +
+  theme(strip.text = element_text(size = 14, face = "bold"))
+
+ggsave("out/pvy risk curve, all spp.png", h = 4, w = 6)
+
+
+
 
 
 # plots -------------------------------------------------------------------
 
-# risk index
-plt <- 
-  pvy_cm %>%
-  ggplot(aes(x = GDD, y = CM)) +
-  scale_x_sqrt(limits = c(500, 5000)) +
-  scale_y_continuous(limits = c(-1, 1)) +
-  geom_abline(intercept = 0, slope = 0) +
-  labs(x = "Degree Days (39/86)",
-       y = "Conditional mode (spline fit deviance)",
-       title = paste("Aggregate PVY risk index for Wisconsin",
-                     min(aphid$Year), "-", max(aphid$Year))
-  ) +
-  theme(strip.text = element_text(size = 14, face = "bold")) +
-  geom_line(data = pvy_gampreds, color = "red", size = 1.5) +
-  geom_point(data = pvy_gampts, aes(x = GDD, y = CM)) +
-  geom_label(data = pvy_gampts, aes(x = GDD, y = CM, label = GDD))
-plt
 
-ggsave("out/pvy risk cm wi.png",
-       plot = p,
-       type = "cairo-png",
-       h = 4,
-       w = 6,
-       dpi = 300)
 
 
 # species plots
