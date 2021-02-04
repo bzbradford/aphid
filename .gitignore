@@ -5,3 +5,6 @@
 .Ruserdata
 ~archive
 .Renviron
+out
+prism
+data
