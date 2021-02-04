@@ -1,9 +1,10 @@
-### PVY-relevant aphid species and infection risk ###
+
+# Libraries ---------------------------------------------------------------
 
 library(tidyverse)
-library(lme4)
-library(mgcv)
 
+
+# PVY-relevant aphid species and infection risk ---------------------------
 
 # Read pvy infectivity data
 pvy_inf <- read_csv("data/pvy-inf.csv")
