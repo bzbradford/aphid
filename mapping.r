@@ -9,7 +9,7 @@ devtools::install_github("dkahle/ggmap")
 
 
 # set google api key
-register_google(key = "AIzaSyBOFuziwPbmD9qFt0EwomTSLyUpo5Guqx0")
+register_google(key = Sys.getenv(map_key))
 
 
 
