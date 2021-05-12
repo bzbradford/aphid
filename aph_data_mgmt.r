@@ -54,7 +54,9 @@ prism %>%
 # read aphid counts (including dummy counts)
 aph_in <- read_csv("data/stn_data_20191016.csv") %>%
   filter(!SpeciesName %in% c('Phylloxeridae', 'Adelgidae')) %>%
-  mutate(Month = as.numeric(format.Date(Date, format = "%m"))) %>%
+  mutate(
+    Month = as.numeric(format.Date(Date, format = "%m")),
+    Week = lubridate::week(Date)) %>%
   mutate_if(is.character, as.factor)
 
 # site info
