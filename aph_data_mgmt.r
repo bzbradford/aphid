@@ -2,68 +2,62 @@
 # libraries ---------------------------------------------------------------
 
 library(tidyverse)
-
-
-
-
-# prism handler -----------------------------------------------------------
-
-# load prism csvs
-prism_in <- list.files("./prism", pattern = glob2rx("PRISM_*.csv"), full.names = T) %>%
-  map_df(~read_csv(., skip = 10))
-
-
-# define GDD function
-gdd_fn <- function(tmin, tmax, lower, upper) {
-  pmax(0, (pmax(tmin, lower) + pmin(tmax, upper)) / 2 - lower)
-}
-
-
-# fix names and add gdd
-prism <- prism_in %>%
-  rename(
-    SiteID = Name,
-    ElevFt = `Elevation (ft)`,
-    tminF = `tmin (degrees F)`,
-    tmaxF = `tmax (degrees F)`
-  ) %>%
-  mutate(
-    State = substr(SiteID, 1, 2),
-    Year = as.numeric(format(Date, "%Y")),
-    Julian = lubridate::yday(Date)) %>%
-  group_by(SiteID, Year) %>%
-  arrange(SiteID, Date) %>%
-  mutate(
-    GDD39 = cumsum(gdd_fn(tminF, tmaxF, 39, 86)),
-    GDD50 = cumsum(gdd_fn(tminF, tmaxF, 50, 86))) %>%
-  ungroup()
-
-
-# GDD accumulation by state and year
-prism %>%
-  ggplot(aes(x = Date, y = GDD39, color = SiteID)) +
-  geom_line() +
-  facet_grid(State ~ Year, scales = "free_x") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  guides(color = "none")
+library(sf)
 
 
 
 # load data files ---------------------------------------------------------
 
 # read aphid counts (including dummy counts)
-aph_in <- read_csv("data/stn_data_20191016.csv") %>%
+aph_in <- read_csv("data/stn_data_20220215.csv", guess_max = 100000) %>%
   filter(!SpeciesName %in% c('Phylloxeridae', 'Adelgidae')) %>%
-  mutate(
-    Month = as.numeric(format.Date(Date, format = "%m")),
-    Week = lubridate::week(Date)) %>%
   mutate_if(is.character, as.factor)
 
-# site info
-aph_sites <- read_csv("data/stn_sites.csv")
+# check for no duplicates
+nrow(aph_in) == nrow(distinct(aph_in, SampleID, SpeciesName))
+
+unique(aph_in$Year)
+
+
+# trap sites --------------------------------------------------------------
+
+# load
+aph_sites <- read_csv("data/stn_sites_20220215.csv")
+
+# to sf
+aph_sites_sf <- aph_sites %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = F)
+
+# show sites
+aph_sites_sf %>%
+  leaflet::leaflet() %>%
+  leaflet::addTiles() %>%
+  leaflet::addMarkers(label = ~ SiteID)
+
+# save sites as kml
+aph_sites_sf %>% 
+  mutate(name = SiteID) %>%
+  mutate(description = paste(SiteName, StateName, sep = ", ")) %>%
+  write_sf("geo/suction_trap_sites_20220215.kml")
+
+# export site list for prism
+aph_in %>%
+  group_by(SiteID, Year) %>%
+  summarise(n = n()) %>%
+  left_join(aph_sites) %>%
+  select(Year, Latitude, Longitude, SiteID) %>%
+  group_by(Year) %>%
+  group_walk(~ write_csv(.x, paste0("prism_sites/", .y$Year, "_sites.csv"), col_names = F))
+
+aph_sites %>%
+  select(Latitude, Longitude, SiteID) %>%
+  write_csv("prism_sites/all_sites.csv", col_names = F)
+
+
+write_csv(paste0("prism_sites/", .data$Year[1], "_sites.csv"))
 
 # species names
-aph_spp <- read_csv("data/aphid_species.csv", na = c('', '.'))
+aph_spp <- read_csv("data/aphid_names_20220215.csv", na = c('', '.'))
 
 
 
@@ -93,7 +87,7 @@ aph_exp <-
     values_fill = list(Count = 0)) %>%
   select(-"_dummy_") %>%
   pivot_longer(
-    cols = 11:ncol(.),
+    cols = 13:ncol(.), # MAKE SURE THIS SELECTION IS CORRECT
     names_to = "SpeciesName",
     values_to = "Count") %>%
   mutate(SpeciesName = as.factor(SpeciesName))
@@ -119,23 +113,65 @@ StateOrder <- states %>%
   .$State
 
 
+# prism handler -----------------------------------------------------------
+
+# load prism csvs
+prism_in <- list.files("./prism", pattern = glob2rx("PRISM_*.csv"), full.names = T) %>%
+  map_df(~read_csv(., skip = 10))
+
+# fix names and add gdd
+prism <- prism_in %>%
+  rename(
+    SiteID = Name,
+    ElevFt = `Elevation (ft)`,
+    tminF = `tmin (degrees F)`,
+    tmaxF = `tmax (degrees F)`
+  ) %>%
+  mutate(
+    State = substr(SiteID, 1, 2),
+    Year = as.numeric(format(Date, "%Y")),
+    Julian = lubridate::yday(Date)) %>%
+  group_by(SiteID, Year) %>%
+  arrange(SiteID, Date) %>%
+  mutate(
+    GDD39_daily = mapply(gdd_sine, tminF, tmaxF, 39, 86),
+    GDD50_daily = mapply(gdd_sine, tminF, tmaxF, 50, 86),
+    GDD39 = cumsum(GDD39_daily),
+    GDD50 = cumsum(GDD50_daily)) %>%
+  ungroup()
+
+
+# GDD accumulation by state and year
+prism %>%
+  ggplot(aes(x = Date, y = GDD39, color = SiteID)) +
+  geom_line() +
+  facet_grid(State ~ Year, scales = "free_x") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(color = "none")
+
+
+
+# create final dataset ----------------------------------------------------
+
 # join month num, state names, degree days, site info, and taxonomic info
-aph_full <- 
-  aph_exp %>%
+aph_full <- aph_exp %>%
+  select(-c("Latitude", "Longitude")) %>%
   mutate_if(is.factor, as.character) %>%
-  left_join(prism[, c('SiteID', 'Date', 'GDD39', 'GDD50')],
-            by = c('SiteID', 'Date')) %>%
-  left_join(aphid_sites[, c('SiteID', 'Lat', 'Lon')],
-            by = 'SiteID') %>%
-  left_join(aphid_spp,
-            by = 'SpeciesName') %>%
+  left_join(
+    select(prism, c('SiteID', 'Date', 'GDD39', 'GDD50')),
+    by = c('SiteID', 'Date')) %>%
+  left_join(
+    select(aph_sites, c('SiteID', 'Latitude', 'Longitude')),
+    by = 'SiteID') %>%
+  left_join(
+    select(aph_spp, -"Count"),
+    by = 'SpeciesName') %>%
   left_join(states) %>%
   mutate_if(is.character, as.factor)
 
 
 # Export file (optional)
-aph_full %>%
-  write_csv("data/aphid stn data export.csv.gz")
+aph_full %>% write_csv("data/aphid_stn_data_export_20220215.csv.gz")
 
 # # export Minnesota data
 # aphid_full %>%
@@ -144,11 +180,16 @@ aph_full %>%
 
 
 
+
+
+
+
+
 # Subset aphid data -------------------------------------------------------
 
 # Species list from Frost code
 aphid <- 
-  aphid_full %>%
+  aph_full %>%
   filter(
     SpeciesName %in% c(
       "Aphis glycines",
@@ -574,7 +615,7 @@ for (s in russ_aphids) {
       axis.ticks.y = element_blank(),
       legend.position = "none"
     )
-  ggsave(p, file=paste0("./out/Abund ", s, ".png"), width = 8, height = 6)
+  ggsave(p, file = paste0("./out/Abund ", s, ".png"), width = 8, height = 6)
 }
 
 
@@ -694,3 +735,117 @@ aph_full %>%
   labs(y = "Mean weekly capture per site",
        title = "Aphid abundance per site in the Aphid Suction Trap Network") +
   theme(panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+
+
+# 2022 Michigan aphid summaries ----------------------------------------------------
+
+mi_aphids <- aph_full %>% filter(State == "MI")
+
+mi_top_aphids <- topSpFn(mi_aphids, 10)
+
+mi_aphid_totals <- mi_aphids %>%
+  group_by(SpeciesName) %>%
+  summarise(TotalCount = sum(Count)) %>%
+  arrange(desc(TotalCount)) %>%
+  mutate(SpeciesName = as.character(SpeciesName))
+
+mi_aphid_totals_by_year <- mi_aphids %>%
+  select(SpeciesName, Year, Count) %>%
+  group_by(SpeciesName, Year) %>%
+  summarise(TotalCount = sum(Count)) %>%
+  ungroup(Year) %>%
+  spread(Year, TotalCount) %>%
+  left_join(mi_aphid_totals) %>%
+  arrange(desc(TotalCount))
+
+mi_aphid_totals_by_year %>% write_csv("out/mi_aphid_totals.csv")
+
+
+## Violin plots by species and year ##
+mi_aphids %>%
+  filter(between(Year, 2010, 2021)) %>%
+  topSpFn(10) %>%
+  group_by(Year, Week, SpeciesName, SiteID) %>%
+  summarise(Count = sum(Count)) %>%
+  summarise(MeanCount = log(mean(Count) + 1)) %>%
+  ggplot(aes(x = as.Date("2020-01-01") + (Week - 1) * 7,
+    fill = SpeciesName)) +
+  geom_hline(yintercept = 0, linetype = "dotted", size = .25, color = "grey") +
+  stat_smooth(aes(y = MeanCount), geom = "area", method = "loess", span = .25) +
+  stat_smooth(aes(y = -MeanCount), geom = "area", method = "loess", span = .25) +
+  facet_grid(Year ~ SpeciesName, scales = "free_x") +
+  scale_x_date(date_labels = "%b") +
+  labs(
+    title = "Michigan aphid abundance over time by year",
+    x = "",
+    y = "Log abundance") +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = .5),
+    panel.spacing = unit(.25, "lines"),
+    strip.background = element_rect(color = NA, fill = NA),
+    strip.text.x = element_text(size = 10, face = "italic"),
+    strip.text.y = element_text(size = 10),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+  )
+
+ggsave("out/Michigan aphid squirrel plots 2010-2021.png", h = 6, w = 10, s = 2, type = "cairo")
+
+
+## violin plots by species and state ##
+plt <-
+  aphid %>%
+  mutate(State = factor(State, levels = StateOrder)) %>%
+  group_by(State, Week, SpeciesName, SiteID) %>%
+  summarise(Count = sum(Count)) %>% # get site totals
+  summarise(MeanCount = log(mean(Count) + 1)) %>% # average across sites
+  ggplot(aes(x = as.Date("2017-01-01") + (Week - 1) * 7,
+    fill = SpeciesName)) +
+  geom_hline(yintercept = 0) +
+  geom_area(aes(y = MeanCount)) +
+  geom_area(aes(y = -MeanCount)) +
+  facet_grid(State ~ SpeciesName, scales = "free_x") +
+  scale_x_date(date_labels = "%b") +
+  labs(title = "Aphid abundance at trap sites (Suction trap data, 2005-2018)",
+    x = "",
+    y = "Log abundance") +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = .5),
+    panel.spacing = unit(.25, "lines"),
+    strip.background = element_rect(color = NA, fill = NA),
+    strip.text.x = element_text(size = 10, face = "italic"),
+    strip.text.y = element_text(size = 10),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+  )
+plt
+ggsave("out/Russ aphids 2019 violin plots by state.png", plt, h = 10, w = 16)
+
+
+
+# individual graphs for each species
+for (s in russ_aphids) {
+  print(s)
+  p =
+    aphid %>%
+    filter(SpeciesName == s) %>%
+    group_by(Year, Week, SpeciesName) %>%
+    summarize(TotCount = log(sum(Count) + 1)) %>%
+    ggplot(aes(x = as.Date("2017-01-01") + (Week - 1) * 7, y = TotCount)) +
+    geom_area(aes(fill = SpeciesName)) +
+    facet_grid(Year ~ SpeciesName, scales = "free_x") +
+    scale_x_date(date_labels = "%b") +
+    labs(x = "Week of Year",
+      y = "Log abundance") +
+    theme(
+      panel.spacing = unit(.1, "lines"),
+      strip.text.x = element_text(size = 12, face = "bold"),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      legend.position = "none"
+    )
+  ggsave(p, file=paste0("./out/Abund ", s, ".png"), width = 8, height = 6)
+}
